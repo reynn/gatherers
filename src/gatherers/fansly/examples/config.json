@@ -1,0 +1,44 @@
+{
+  "locale": "en-US",
+  "brand": "Select Media LLC",
+  "brandCount": 1,
+  "color": "#1b1c21",
+  "embeds": {
+    "ticketSubmissionForm": {
+      "embed": "submitTicket",
+      "props": {
+        "color": "#1b1c21",
+        "attachmentsEnabled": true,
+        "maxFileSize": 52428800,
+        "nameFieldEnabled": false
+      }
+    },
+    "chat": {
+      "embed": "chat",
+      "props": {
+        "color": "#1b1c21",
+        "zopimId": "f9xN3OxnqLiovBaup4STielFVC37EDkU",
+        "badge": {
+          "color": "#e9ebed",
+          "enabled": true,
+          "imagePath": "",
+          "layout": "image_right",
+          "text": "Chat with us"
+        },
+        "forms": {
+          "offlineEnabled": true,
+          "preChatEnabled": true
+        },
+        "mediatorHost": "widget-mediator.zopim.com"
+      }
+    },
+    "launcher": {
+      "embed": "launcher",
+      "props": {
+        "color": "#1b1c21",
+        "labelKey": "support"
+      }
+    }
+  },
+  "features": {}
+}
