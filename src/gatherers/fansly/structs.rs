@@ -1,7 +1,11 @@
+use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+use crate::gatherers::SubscriptionCost;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct SubscriptionStats {
+pub struct SubscriptionStats {
     pub total: i32,
     #[serde(rename = "totalActive")]
     pub total_active: i32,
@@ -10,11 +14,11 @@ pub(super) struct SubscriptionStats {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(super) struct Account {
+pub struct Account {
     pub id: String,
     pub username: String,
     #[serde(rename = "displayName")]
-    pub display_name: String,
+    pub display_name: Option<String>,
     pub flags: i64,
     pub version: i64,
     #[serde(rename = "createdAt")]
@@ -25,12 +29,12 @@ pub(super) struct Account {
     pub subscriber_count: i64,
     pub permissions: Permissions,
     #[serde(rename = "timelineStats")]
-    pub timeline_stats: TimelineStats,
+    pub timeline_stats: Option<TimelineStats>,
     #[serde(rename = "statusId")]
     pub status_id: i64,
     #[serde(rename = "lastSeenAt")]
     pub last_seen_at: i64,
-    pub following: bool,
+    pub following: Option<bool>,
     #[serde(rename = "postLikes")]
     pub post_likes: i64,
     #[serde(rename = "profileAccessFlags")]
@@ -39,8 +43,8 @@ pub(super) struct Account {
     pub location: String,
     #[serde(rename = "accountMediaLikes")]
     pub account_media_likes: i64,
-    pub subscribed: bool,
-    pub subscription: Subscription,
+    pub subscribed: Option<bool>,
+    pub subscription: Option<FanslySub>,
     #[serde(rename = "subscriptionTiers")]
     pub subscription_tiers: Vec<SubscriptionTier>,
     pub avatar: Avatar,
@@ -50,7 +54,7 @@ pub(super) struct Account {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(super) struct Avatar {
+pub struct Avatar {
     pub id: String,
     #[serde(rename = "type")]
     pub avatar_type: i64,
@@ -61,7 +65,7 @@ pub(super) struct Avatar {
     pub filename: String,
     pub width: i64,
     pub height: i64,
-    pub metadata: String,
+    pub metadata: Option<String>,
     #[serde(rename = "updatedAt")]
     pub updated_at: i64,
     #[serde(rename = "createdAt")]
@@ -75,23 +79,23 @@ pub(super) struct Avatar {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Permissions {
     #[serde(rename = "accountPermissionFlags")]
-    pub(super) account_permission_flags: Option<AccountPermissionFlags>,
+    pub account_permission_flags: Option<AccountPermissionFlags>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Wallet {
-    pub(super) id: Option<i64>,
+    pub id: Option<i64>,
     #[serde(rename = "accountId")]
-    pub(super) account_id: Option<String>,
-    pub(super) balance: Option<i64>,
+    pub account_id: Option<String>,
+    pub balance: Option<i64>,
     #[serde(rename = "type")]
-    pub(super) earnings_wallet_type: Option<i64>,
+    pub earnings_wallet_type: Option<i64>,
     #[serde(rename = "walletVersion")]
-    pub(super) wallet_version: Option<i64>,
+    pub wallet_version: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct AccountMedia {
+pub struct AccountMedia {
     pub access: bool,
     #[serde(rename = "accountId")]
     pub account_id: String,
@@ -122,14 +126,14 @@ pub(super) struct AccountMedia {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct BundleContent {
+pub struct BundleContent {
     #[serde(rename = "accountMediaId")]
     pub account_media_id: String,
-    pub pos: i64,
+    pub pos: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct Media {
+pub struct Media {
     #[serde(rename = "accountId")]
     pub account_id: String,
     #[serde(rename = "createdAt")]
@@ -138,8 +142,8 @@ pub(super) struct Media {
     pub height: i64,
     pub id: String,
     pub locations: Vec<Location>,
-    pub metadata: String,
-    pub mimetype: Mimetype,
+    pub metadata: Option<String>,
+    pub mimetype: Option<String>,
     pub status: Option<i64>,
     #[serde(rename = "type")]
     pub media_type: i64,
@@ -152,22 +156,22 @@ pub(super) struct Media {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct Location {
+pub struct Location {
     pub location: String,
     #[serde(rename = "locationId")]
     pub location_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct VariantHash {}
+pub struct VariantHash {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct Variant {
+pub struct Variant {
     pub filename: String,
     pub height: i64,
     pub id: String,
     pub locations: Vec<Location>,
-    pub mimetype: Mimetype,
+    pub mimetype: Option<String>,
     pub status: Option<i64>,
     #[serde(rename = "type")]
     pub variant_type: i64,
@@ -177,7 +181,7 @@ pub(super) struct Variant {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct AccountMediaPermissions {
+pub struct AccountMediaPermissions {
     #[serde(rename = "accountPermissionFlags")]
     pub account_permission_flags: AccountPermissionFlags,
     #[serde(rename = "permissionFlags")]
@@ -185,51 +189,49 @@ pub(super) struct AccountMediaPermissions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct AccountPermissionFlags {
+pub struct AccountPermissionFlags {
     pub flags: i64,
-    pub metadata: AccountTimelineReadPermissionFlagsMetadata,
+    pub metadata: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct PermissionFlag {
+pub struct PermissionFlag {
     #[serde(rename = "accountMediaId")]
     pub account_media_id: String,
     pub flags: i64,
     pub id: String,
-    pub metadata: PermissionFlagMetadata,
+    pub metadata: Option<HashMap<String, String>>,
     pub price: i64,
     #[serde(rename = "type")]
     pub permission_flag_type: i64,
     #[serde(rename = "validAfter")]
-    pub valid_after: Option<serde_json::Value>,
+    pub valid_after: Option<String>,
     #[serde(rename = "validBefore")]
-    pub valid_before: Option<serde_json::Value>,
+    pub valid_before: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct AccountPermissions {
+pub struct AccountPermissions {
     #[serde(rename = "accountPermissionFlags")]
-    pub account_permission_flags: PurpleAccountPermissionFlags,
+    pub account_permission_flags: PermissionFlag,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct PurpleAccountPermissionFlags {
-    pub flags: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct PinnedPost {
+pub struct PinnedPost {
     #[serde(rename = "accountId")]
     pub account_id: String,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
-    pub pos: i64,
+    pub pos: Option<i64>,
     #[serde(rename = "postId")]
     pub post_id: String,
 }
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
-pub(super) struct Subscription {
+pub struct FanslySub {
+    pub username: Option<String>,
+    #[serde(rename = "displayName")]
+    pub display_name: Option<String>,
     #[serde(rename = "accountId")]
     pub account_id: String,
     #[serde(rename = "autoRenew")]
@@ -252,7 +254,7 @@ pub(super) struct Subscription {
     #[serde(rename = "promoEndsAt")]
     pub promo_ends_at: Option<i64>,
     #[serde(rename = "promoId")]
-    pub promo_id: String,
+    pub promo_id: Option<String>,
     #[serde(rename = "promoPrice")]
     pub promo_price: Option<i64>,
     #[serde(rename = "promoStartsAt")]
@@ -274,8 +276,22 @@ pub(super) struct Subscription {
     pub updated_at: i64,
 }
 
+impl From<FanslySub> for super::Subscription {
+    fn from(val: FanslySub) -> Self {
+        super::Subscription {
+            username: "*unknown*".into(),
+            id: val.account_id,
+            plan: String::from(&val.subscription_tier_name),
+            started: Utc.timestamp((val.created_at as f64 * 0.001) as i64, 0).into(),
+            renewal_date: Utc.timestamp((val.renew_date as f64 * 0.001) as i64, 0).into(),
+            rewewal_price: SubscriptionCost(Some(val.renew_price)),
+            ends_at: Utc.timestamp((val.ends_at as f64 * 0.001) as i64, 0).into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct SubscriptionTier {
+pub struct SubscriptionTier {
     #[serde(rename = "accountId")]
     pub account_id: String,
     pub color: String,
@@ -288,7 +304,7 @@ pub(super) struct SubscriptionTier {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct Plan {
+pub struct Plan {
     #[serde(rename = "billingCycle")]
     pub billing_cycle: i64,
     pub id: String,
@@ -301,7 +317,7 @@ pub(super) struct Plan {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct Promo {
+pub struct Promo {
     pub duration: i64,
     #[serde(rename = "endsAt")]
     pub ends_at: i64,
@@ -320,7 +336,7 @@ pub(super) struct Promo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct TimelineStats {
+pub struct TimelineStats {
     #[serde(rename = "accountId")]
     pub account_id: String,
     #[serde(rename = "bundleCount")]
@@ -338,7 +354,7 @@ pub(super) struct TimelineStats {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct Post {
+pub struct Post {
     #[serde(rename = "accountId")]
     pub account_id: String,
     #[serde(rename = "accountMentions")]
@@ -372,16 +388,16 @@ pub(super) struct Post {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct Attachment {
+pub struct Attachment {
     #[serde(rename = "contentId")]
     pub content_id: String,
     #[serde(rename = "contentType")]
     pub content_type: i64,
-    pub pos: String,
+    pub pos: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct PostReplyPermissionFlag {
+pub struct PostReplyPermissionFlag {
     pub flags: i64,
     pub id: String,
     pub metadata: String,
@@ -392,7 +408,7 @@ pub(super) struct PostReplyPermissionFlag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct TipGoal {
+pub struct TipGoal {
     #[serde(rename = "accountId")]
     pub account_id: String,
     #[serde(rename = "createdAt")]
@@ -408,34 +424,4 @@ pub(super) struct TipGoal {
     pub hide_amounts: i64,
     pub id: String,
     pub label: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Mimetype {
-    #[serde(rename = "image/png")]
-    ImagePng,
-    #[serde(rename = "video/mp4")]
-    VideoMp4,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AccountTimelineReadPermissionFlagsMetadata {
-    #[serde(rename = "{}")]
-    Empty,
-    #[serde(rename = "{\"4\":\"{\\\"subscriptionTierId\\\":\\\"227989260228100096\\\"}\"}")]
-    The4SubscriptionTierId227989260228100096,
-    #[serde(rename = "{\"4\":\"{\\\"subscriptionTierId\\\":\\\"285261438442807296\\\"}\"}")]
-    The4SubscriptionTierId285261438442807296,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PermissionFlagMetadata {
-    #[serde(rename = "")]
-    Empty,
-    #[serde(rename = "{\"1\":\"{\\\"price\\\":3000}\"}")]
-    The1Price3000,
-    #[serde(rename = "{\"1\":\"{\\\"price\\\":5000}\"}")]
-    The1Price5000,
-    #[serde(rename = "{\"4\":\"{\\\"subscriptionTierId\\\":\\\"\\\"}\"}")]
-    The4SubscriptionTierId,
 }

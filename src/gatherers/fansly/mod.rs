@@ -1,24 +1,16 @@
 mod responses;
 mod structs;
 
+use std::collections::HashMap;
+
 use super::GathererErrors;
-use crate::{
-    config::Config,
-    gatherers::{
-        fansly::responses::{AccountResponse, StatusResponse},
-        Gatherer,
-    },
-};
-use reqwest::{
-    blocking::{Client, Request, RequestBuilder},
-    header::{self, HeaderValue},
-    Method, Url,
-};
+use crate::{config::Config, gatherers::{Gatherer, Media, Subscription, fansly::{self, responses::{AccountsResponse, PostsResponse, StatusResponse, SubscriptionResponse}, structs::FanslySub}}, http::ApiClient};
 use serde::{Deserialize, Serialize};
 
-const FANSLY_API_VALIDATION_URL: &str = "https://apiv2.fansly.com/api/v1/status";
+const FANSLY_API_STATUS_URL: &str = "https://apiv2.fansly.com/api/v1/status";
 const FANSLY_API_USER_ACCOUNT_URL: &str = "https://apiv2.fansly.com/api/v1/account";
 const FANSLY_API_SUBS_URL: &str = "https://apiv2.fansly.com/api/v1/subscriptions";
+const FANSLY_API_TIMELINE_URL: &str = "https://apiv2.fansly.com/api/v1/timeline";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FanslyConfig {
@@ -29,12 +21,13 @@ pub struct FanslyConfig {
 #[derive(Debug, Clone)]
 pub struct Fansly {
     conf: FanslyConfig,
-    http_client: Client,
+    http_client: ApiClient,
 }
 
 impl Fansly {
-    pub fn new(conf: &'_ FanslyConfig) -> super::Result<Self> {
-        if !conf.enabled {
+    pub fn new(conf: &'_ Config) -> super::Result<Self> {
+        let fansly_conf = &conf.fansly;
+        if !fansly_conf.enabled {
             return Err(GathererErrors::NotEnabled {
                 name: String::from("Fansly"),
             });
@@ -42,132 +35,141 @@ impl Fansly {
 
         log::debug!("Initializing Fansly...");
         let s = Self {
-            http_client: Client::new(),
-            conf: conf.clone(),
+            http_client: ApiClient::new(conf),
+            conf: fansly_conf.clone(),
         };
 
-        if let Err(validate_err) = s.validate_auth_token() {
-            log::error!("Failed to validate the Fansly token. {}", &validate_err);
-        };
-
-        Ok(s)
+        match s.validate_auth_token() {
+            Ok(_) => Ok(s),
+            Err(e) => Err(e),
+        }
     }
 
-    fn api<T: for<'de> serde::Deserialize<'de>, U: Into<Url>>(
-        &self,
-        method: Method,
-        endpoint: U,
-    ) -> super::Result<T> {
-        let mut req = Request::new(method, endpoint.into());
-
-        let headers = req.headers_mut();
-        headers.append(
-            header::AUTHORIZATION,
-            HeaderValue::from_str(&self.conf.auth_token)?,
+    fn get_user_accounts(&self, account_ids: &[&'_ str]) -> super::Result<AccountsResponse> {
+        let endpoint = format!(
+            "{}?ids={}",
+            FANSLY_API_USER_ACCOUNT_URL,
+            account_ids.join(",")
         );
-        let api_endpoint = String::from(req.url().as_str());
-        let resp = self.http_client.execute(req)?;
-
-        let status = &resp.status();
-        if !status.is_success() {
-            return Err(GathererErrors::HttpError {
-                status: *status,
-                response_body: Some(resp.text().unwrap_or_default()),
-            });
-        };
-
-        let body = &resp.text()?;
-        log::debug!("Response from {:?}.\n{}", api_endpoint, body);
-        Ok(serde_json::from_str(body)?)
+        Ok(self.http_client.get(&endpoint, None)?)
     }
 
-    fn get_user_accounts(&self, account_ids: &[&'_ str]) -> super::Result<Vec<structs::Account>> {
-        match Url::parse(FANSLY_API_USER_ACCOUNT_URL) {
-            Ok(mut account_url) => {
-                account_url.set_query(Some(&format!("ids={}", account_ids.join(","))));
-                let accounts: AccountResponse = self.api(Method::GET, account_url)?;
-                Ok(accounts.response)
+    fn get_account_subscriptions(&self) -> super::Result<Vec<super::Subscription>> {
+        let subs = self
+            .http_client
+            .get::<SubscriptionResponse>(FANSLY_API_SUBS_URL, self.get_default_headers());
+
+        match subs {
+            Ok(resp) => {
+                if resp.success {
+                    let sub_account_ids: Vec<&str> = resp
+                        .response
+                        .subscriptions
+                        .iter()
+                        .map(|fan_sub| fan_sub.account_id.as_str())
+                        .collect();
+                    // get the full user account info so we can attach extra data to our subscription info
+                    match self.get_user_accounts(&sub_account_ids) {
+                        Ok(account_infos) => {
+                            let account_infos = account_infos.response;
+                            log::info!(
+                                "Found {} accounts, for the {} subscribers",
+                                account_infos.len(),
+                                account_infos.len()
+                            );
+                            let subscriptions = resp.response.subscriptions;
+                            Ok(subscriptions
+                                .into_iter()
+                                .map(|sub| {
+                                    let account_info = account_infos
+                                        .iter()
+                                        .find(|info| info.id == sub.account_id)
+                                        .unwrap();
+                                    let username = match &account_info.display_name {
+                                        Some(disp_name) => disp_name.to_string(),
+                                        None => account_info.username.to_string(),
+                                    };
+                                    let rewewal_price = Some(
+                                        sub.renew_price
+                                            .to_string()
+                                            .parse::<f64>()
+                                            .unwrap_or_default(),
+                                    );
+                                    let mut new_sub: super::Subscription = sub.into();
+                                    new_sub.username = username;
+                                    new_sub
+                                })
+                                .collect())
+                        }
+                        Err(user_account_err) => {
+                            log::error!("Failed to gather user accounts: {:?}", user_account_err);
+                            Err(user_account_err)
+                        }
+                    }
+                } else {
+                    Err(GathererErrors::NoSubscriptionsFound {
+                        gatherer: self.name().to_string(),
+                        data: format!("{:?}", resp.response),
+                    })
+                }
             }
-            Err(e) => Err(GathererErrors::UrlError(e)),
+            Err(resp_err) => Err(resp_err.into()),
         }
     }
 
     fn validate_auth_token(&self) -> super::Result<&Self> {
-        let status: StatusResponse =
-            self.api(Method::POST, Url::parse(FANSLY_API_VALIDATION_URL)?)?;
-        log::debug!("Fansly Auth Status: {:?}", status);
-        if status.success {
-            Ok(self)
-        } else {
-            Err(GathererErrors::InvalidCredentials {
-                name: self.name().into(),
-                msg: "Bad credentials".into(),
-            })
-        }
+        let res: StatusResponse = self.http_client.post(
+            FANSLY_API_STATUS_URL,
+            self.get_default_headers(),
+            Some([("statusId", 1)]),
+        )?;
+        Ok(self)
+    }
+
+    fn get_default_headers(&self) -> Option<HashMap<&'_ str, &'_ str>> {
+        let mut hm = HashMap::new();
+        hm.insert("Authorization", &self.conf.auth_token[..]);
+        Some(hm)
     }
 }
 
 // #[async_trait::async_trait]
 impl Gatherer for Fansly {
-    fn name(&self) -> &'static str {
-        "fansly"
-    }
-
     fn gather_subscriptions<'a>(&self) -> super::Result<Vec<super::Subscription>> {
-        log::info!("Gathering Fansly subscriptions");
-
-        let sub_reponse: responses::SubscriptionResponse =
-            self.api(Method::GET, Url::parse(FANSLY_API_SUBS_URL)?)?;
-
-        if sub_reponse.success {
-            let subs = &sub_reponse.response.subscriptions;
-            let account_ids: Vec<&str> = subs.iter().map(|sub| sub.account_id.as_str()).collect();
-            let sub_accounts = self.get_user_accounts(&account_ids)?;
-            log::debug!("Found accounts: {:?}", &sub_accounts);
-            // let fansly_subs = sub_reponse
-            //     .response
-            //     .subscriptions
-            //     .into_iter()
-            //     .map(|sub| {
-            //         let sub = &sub;
-            //         match self.get_user_accounts(&[&sub.account_id]) {
-            //             Ok(account) => {
-            //                 let account = account.get(0).unwrap();
-            //                 log::debug!("AccountID: {}. {:?}", &account.username, &account);
-            //                 super::Subscription {
-            //                     username: account.username.to_owned(),
-            //                     id: String::from(&sub.account_id),
-            //                     plan: None,
-            //                     expires: sub.ends_at.to_string(),
-            //                     started: sub.created_at.to_string(),
-            //                 }
-            //             }
-            //             Err(err) => {
-            //                 log::error!("Failed to get account, {:?}", err);
-            //                 super::Subscription {
-            //                     username: "".into(),
-            //                     id: String::from(&sub.account_id),
-            //                     plan: None,
-            //                     expires: "".into(),
-            //                     started: "".into(),
-            //                 }
-            //             }
-            //         }
-            //     })
-            //     .collect();
-            todo!();
-            // Ok(fansly_subs)
-        } else {
-            log::error!("Failure in response: {:?}", sub_reponse);
-            Ok(Vec::new())
-        }
+        self.get_account_subscriptions()
     }
 
-    fn gather_posts(&self, _sub: &'_ super::Subscription) -> super::Result<Vec<super::Post>> {
-        Err(GathererErrors::NotSupportedByGatherer {
-            gatherer_name: self.name().into(),
-            feature: "posts".into(),
-        })
+    fn gather_posts(&self, sub: &'_ super::Subscription) -> super::Result<Vec<super::Post>> {
+        let posts_url = format!("{}/{}", FANSLY_API_TIMELINE_URL, sub.id);
+        let response = self
+            .http_client
+            .get::<PostsResponse>(&posts_url, self.get_default_headers());
+        match response {
+            Ok(post_response) => {
+                log::info!("Response: {:?}", post_response);
+
+                Ok(post_response
+                    .response
+                    .posts
+                    .iter()
+                    .map(|post| super::Post {
+                        id: String::from(&post.id),
+                        title: None,
+                        content: Some(String::from(&post.content)),
+                        media: post
+                            .attachments
+                            .iter()
+                            .map(|f| super::Media {})
+                            .collect::<Vec<Media>>(),
+                        paid: false,
+                    })
+                    .collect())
+            }
+            Err(err) => {
+                log::error!("Failed to gather posts for {}. {}", sub.username, err);
+                Err(err.into())
+            }
+        }
     }
 
     fn gather_messages(&self, _sub: &'_ super::Subscription) -> super::Result<Vec<super::Message>> {
@@ -182,6 +184,10 @@ impl Gatherer for Fansly {
             gatherer_name: self.name().into(),
             feature: "stories".into(),
         })
+    }
+
+    fn name(&self) -> &'static str {
+        "fansly"
     }
 
     fn is_enabled(&self) -> bool {

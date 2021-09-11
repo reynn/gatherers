@@ -1,9 +1,14 @@
 mod errors;
 
-use crate::{config::errors::ConfigErrors, gatherers::{
-    fansly::{Fansly, FanslyConfig},
-    onlyfans::OnlyFansConfig,
-}};
+use crate::{
+    config::errors::ConfigErrors,
+    downloaders::DownloadersConfig,
+    gatherers::{
+        fansly::{Fansly, FanslyConfig},
+        onlyfans::OnlyFansConfig,
+    },
+    http::ApiClientConfig,
+};
 use directories::{BaseDirs, ProjectDirs};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -13,6 +18,8 @@ pub type Result<T, E = errors::ConfigErrors> = std::result::Result<T, E>;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     pub config_dir: String,
+    pub http_client: Option<ApiClientConfig>,
+    pub downloaders: Option<DownloadersConfig>,
     pub fansly: FanslyConfig,
     pub only_fans: OnlyFansConfig,
 }
@@ -70,9 +77,10 @@ impl Drop for Config {
 
 impl Default for Config {
     fn default() -> Self {
-        let default_directory = get_default_path();
+        let config_directory = get_default_path();
+        // let temp_dir = BaseDirs::
         Self {
-            config_dir: String::from(default_directory.to_str().unwrap_or_default()),
+            config_dir: String::from(config_directory.to_str().unwrap_or_default()),
             fansly: FanslyConfig {
                 enabled: true,
                 auth_token: String::new(),
@@ -82,7 +90,14 @@ impl Default for Config {
                 session_token: String::new(),
                 user_agent: String::new(),
                 app_token: String::new(),
+                user_id: String::new(),
+                cookie: String::new(),
+                ignore_lists: Vec::new(),
             },
+            http_client: Some(ApiClientConfig {}),
+            downloaders: Some(DownloadersConfig {
+                storage_dir: "/tmp".into(),
+            }),
         }
     }
 }

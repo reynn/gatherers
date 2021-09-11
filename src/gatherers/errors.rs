@@ -9,7 +9,7 @@ pub enum GathererErrors {
     #[error("No stories found for {username}, using the {gatherer} gatherer")]
     NoStoriesFound { gatherer: String, username: String },
     #[error("No subscriptions found using the {gatherer} gatherer")]
-    NoSubscriptionsFound { gatherer: String },
+    NoSubscriptionsFound { gatherer: String, data: String },
     #[error("The {gatherer_name} gatherer does not support the {feature} feature")]
     NotSupportedByGatherer {
         gatherer_name: String,
@@ -30,14 +30,8 @@ pub enum GathererErrors {
     HttpError { status: reqwest::StatusCode, response_body: Option<String> },
 
     // Sub errors from other modules
+    #[error("Failed to parse URL, details: {0:?}")]
+    HttpClientError(#[from] crate::http::errors::HttpErrors),
     #[error("Failed to parse URL, details: {0}")]
     UrlError(#[from] url::ParseError),
-    #[error("Unable to add header to reqwest: {0}")]
-    InvalidHeaderValue(#[from] reqwest::header::InvalidHeaderValue),
-    #[error("Unable to add header to reqwest: {0}")]
-    InvalidHeaderName(#[from] reqwest::header::InvalidHeaderName),
-    #[error("Internal `reqwest` error, {0}")]
-    ReqwestError(#[from] reqwest::Error),
-    #[error("Malformed JSON? {0}")]
-    JsonError(#[from] serde_json::Error),
 }

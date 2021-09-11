@@ -11,3 +11,5 @@ Cargo.lock
 
 # dont commit the log files if they exist
 *.log
+
+**/examples/

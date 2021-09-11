@@ -7,6 +7,8 @@ pub struct Cli {
     pub config_file_path: Option<PathBuf>,
     #[structopt(short, long)]
     pub verbose: bool,
+    #[structopt(long)]
+    pub content_types: Option<String>,
 }
 
 impl Cli {
