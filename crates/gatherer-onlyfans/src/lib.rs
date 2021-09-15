@@ -1,15 +1,10 @@
 mod responses;
 mod structs;
 
-use crate::http::Result as HttpResult;
-use crate::{
-    config::Config,
-    gatherers::{
-        errors::GathererErrors,
-        onlyfans::{responses::ValidationResponse, structs::DynamicRule},
-        Gatherer,
-    },
-    http::ApiClient,
+use gatherer_core::{
+    gatherers::{Gatherer, GathererErrors, Media, Subscription},
+    http::{ApiClient, ApiClientConfig},
+    AsyncResult, Result,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -56,32 +51,38 @@ pub struct OnlyFansConfig {
 }
 
 #[derive(Debug)]
-pub struct OnlyFans {
-    config: OnlyFansConfig,
-    http_client: ApiClient,
+pub struct OnlyFans<'a> {
+    config: &'a OnlyFansConfig,
+    http_client: ApiClient<'a>,
 }
 
-impl OnlyFans {
-    pub fn new(conf: &'_ Config) -> super::Result<Self> {
-        let of_conf = &conf.only_fans;
+impl<'a> OnlyFans<'a> {
+    pub async fn new(
+        of_conf: &'a OnlyFansConfig,
+        api_conf: &'a ApiClientConfig,
+    ) -> AsyncResult<OnlyFans<'a>> {
         if !of_conf.enabled {
-            return Err(GathererErrors::NotEnabled {
+            return Err(Box::new(GathererErrors::NotEnabled {
                 name: String::from("OnlyFans"),
-            });
+            }));
         }
 
         let s = Self {
-            config: conf.only_fans.clone(),
-            http_client: ApiClient::new(conf),
+            config: of_conf,
+            http_client: ApiClient::new(api_conf),
         };
 
-        match s.valididate_token() {
-            Ok(_) => Ok(s),
-            Err(e) => Err(e),
+        if !s.valididate_token().await {
+            Err(Box::new(GathererErrors::FailedToInitialize(
+                "".into(),
+                "".into(),
+            )))
+        } else {
+            Ok(s)
         }
     }
 
-    fn get_default_headers(&self, _rules: &[DynamicRule]) -> HashMap<&str, &str> {
+    fn get_default_headers(&self, _rules: &[structs::DynamicRule]) -> HashMap<&str, &str> {
         let mut h = HashMap::new();
         h.insert("authorization", &self.config.session_token[..]);
         h.insert("user-agent", &self.config.user_agent[..]);
@@ -89,41 +90,45 @@ impl OnlyFans {
         h
     }
 
-    fn valididate_token(&self) -> super::Result<()> {
-        let rules: Vec<DynamicRule> = Vec::new();
+    async fn valididate_token(&self) -> bool {
+        let rules: Vec<structs::DynamicRule> = Vec::new();
         // let headers = self.get_default_headers(&rules);
-        let resp: HttpResult<ValidationResponse> = self
+        let resp: AsyncResult<responses::ValidationResponse> = self
             .http_client
-            .get(ONLYFANS_ME_URL, Some(self.get_default_headers(&rules)));
+            .get(ONLYFANS_ME_URL, Some(self.get_default_headers(&rules)))
+            .await;
         match resp {
             Ok(ok) => {
-                log::debug!("Validation Response: {:?}\n---------------------------", ok);
-                Ok(())
+                tracing::debug!("Validation Response: {:?}\n---------------------------", ok);
+                true
             }
-            Err(err) => Err(err.into()),
+            Err(err) => {
+                tracing::error!("Failed to validate tokken. {}", err);
+                false
+            }
         }
     }
 
-    fn get_subscriptions(&self) -> Vec<super::Subscription> {
+    fn get_subscriptions(&self) -> Vec<Subscription> {
         Vec::new()
     }
 }
 
 #[async_trait::async_trait]
-impl Gatherer for OnlyFans {
-    fn gather_subscriptions(&self) -> super::Result<Vec<super::Subscription>> {
+impl<'a> Gatherer for OnlyFans<'a> {
+    async fn gather_subscriptions(&self) -> AsyncResult<Vec<Subscription>> {
         todo!()
     }
 
-    fn gather_posts(&self, _sub: &'_ super::Subscription) -> super::Result<Vec<super::Post>> {
+    async fn gather_media_from_posts(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
         todo!()
     }
 
-    fn gather_messages(&self, _sub: &'_ super::Subscription) -> super::Result<Vec<super::Message>> {
+    async fn gather_media_from_messages(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
         todo!()
     }
 
-    fn gather_stories(&self, _sub: &'_ super::Subscription) -> super::Result<Vec<super::Story>> {
+    async fn gather_media_from_stories(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
         todo!()
     }
 

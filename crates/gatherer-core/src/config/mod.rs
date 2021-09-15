@@ -1,15 +1,12 @@
 mod errors;
 
 use crate::{
-    config::errors::ConfigErrors,
+    directories::Directories,
     downloaders::DownloadersConfig,
-    gatherers::{
-        fansly::{Fansly, FanslyConfig},
-        onlyfans::OnlyFansConfig,
-    },
     http::ApiClientConfig,
 };
 use directories::{BaseDirs, ProjectDirs};
+pub use errors::ConfigErrors;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -18,23 +15,23 @@ pub type Result<T, E = errors::ConfigErrors> = std::result::Result<T, E>;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     pub config_dir: String,
-    pub http_client: Option<ApiClientConfig>,
+    pub api_config: Option<ApiClientConfig>,
     pub downloaders: Option<DownloadersConfig>,
-    pub fansly: FanslyConfig,
-    pub only_fans: OnlyFansConfig,
+    // pub fansly: FanslyConfig,
+    // pub only_fans: OnlyFansConfig,
 }
 
 impl Config {
     pub fn load<P: Into<PathBuf>>(path: P) -> Result<Self> {
         let path: PathBuf = path.into();
-        log::debug!("Config::load({:?})", &path);
+        tracing::debug!("Config::load({:?})", &path);
         Self::load_or_create_config(&path)
     }
 
     fn load_or_create_config(config_dir: &Path) -> Result<Self> {
-        log::debug!("Loading config from path: {:?}", &config_dir);
+        tracing::debug!("Loading config from path: {:?}", &config_dir);
         if !config_dir.exists() {
-            log::debug!("Creating directory: {:?}", config_dir);
+            tracing::debug!("Creating directory: {:?}", config_dir);
             std::fs::create_dir_all(config_dir)?;
         }
         let conf_file_path = config_dir.join("config.toml");
@@ -62,7 +59,7 @@ impl Config {
             config_dir.join("config.toml"),
             toml::to_string_pretty(self)?,
         )?;
-        log::debug!("Successfully saved config file to {:?}", config_dir);
+        tracing::debug!("Successfully saved config file to {:?}", config_dir);
         Ok(())
     }
 }
@@ -70,45 +67,23 @@ impl Config {
 impl Drop for Config {
     fn drop(&mut self) {
         if let Err(err) = self.save() {
-            log::error!("Failed to save the config file, {:?}", err);
+            panic!("Failed to save the config file, {:?}", err);
         }
     }
 }
 
 impl Default for Config {
     fn default() -> Self {
-        let config_directory = get_default_path();
-        // let temp_dir = BaseDirs::
+        let dirs = Directories::new();
+        let config_directory = dirs.get_default_config_dir();
         Self {
             config_dir: String::from(config_directory.to_str().unwrap_or_default()),
-            fansly: FanslyConfig {
-                enabled: true,
-                auth_token: String::new(),
-            },
-            only_fans: OnlyFansConfig {
-                enabled: true,
-                session_token: String::new(),
-                user_agent: String::new(),
-                app_token: String::new(),
-                user_id: String::new(),
-                cookie: String::new(),
-                ignore_lists: Vec::new(),
-            },
-            http_client: Some(ApiClientConfig {}),
+            // fansly: FanslyConfig::default(),
+            // only_fans: OnlyFansConfig::default(),
+            api_config: None,
             downloaders: Some(DownloadersConfig {
                 storage_dir: "/tmp".into(),
             }),
         }
-    }
-}
-
-pub(crate) fn get_default_path() -> PathBuf {
-    if let Some(proj_dirs) = ProjectDirs::from("dev", "reynn", env!("CARGO_PKG_NAME")) {
-        proj_dirs.config_dir().to_owned()
-    } else if let Some(base_dirs) = BaseDirs::new() {
-        let app_name = env!("CARGO_PKG_NAME");
-        base_dirs.config_dir().join(app_name)
-    } else {
-        panic!("Unable to determine a home directory. Unable to proceed, ensure your shell is properly configured")
     }
 }

@@ -1,7 +1,9 @@
-use cfg_rs::*;
-use serde::{Deserialize, Serialize};
+mod errors;
 
-#[derive(Debug, Default, FromConfig, Deserialize, Serialize)]
+use serde::{Deserialize, Serialize};
+pub use errors::DownloaderErrors;
+
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct DownloadersConfig {
     pub storage_dir: String,
 }

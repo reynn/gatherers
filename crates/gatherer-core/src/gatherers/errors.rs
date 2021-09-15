@@ -27,11 +27,14 @@ pub enum GathererErrors {
     #[error("Invalid credentials for the {name} gatherer. {msg}")]
     InvalidCredentials { name: String, msg: String },
     #[error("API Error: Status Code {status}")]
-    HttpError { status: reqwest::StatusCode, response_body: Option<String> },
+    HttpError {
+        status: reqwest::StatusCode,
+        response_body: Option<String>,
+    },
 
     // Sub errors from other modules
     #[error("Failed to parse URL, details: {0:?}")]
-    HttpClientError(#[from] crate::http::errors::HttpErrors),
+    HttpClientError(#[from] crate::http::HttpErrors),
     #[error("Failed to parse URL, details: {0}")]
     UrlError(#[from] url::ParseError),
 }

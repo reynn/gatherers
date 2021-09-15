@@ -47,8 +47,8 @@ pub struct Subscription {
     #[serde(rename = "subscribePrice")]
     pub subscribe_price: f64,
     pub vat: Vat,
-    #[serde(rename = "subscriptionBundles")]
-    pub subscription_bundles: Option<Vec<Option<serde_json::Value>>>,
+    // #[serde(rename = "subscriptionBundles")]
+    // pub subscription_bundles: Option<Vec<Option<serde_json::Value>>>,
     #[serde(rename = "isPaywallRestriction")]
     pub is_paywall_restriction: bool,
     pub unprofitable: Option<bool>,
@@ -98,9 +98,9 @@ pub struct Subscription {
     pub can_trial_send: bool,
     #[serde(rename = "isBlocked")]
     pub is_blocked: bool,
-    #[serde(rename = "displayName")]
-    pub display_name: Option<serde_json::Value>,
-    pub notice: Option<serde_json::Value>,
+    // #[serde(rename = "displayName")]
+    // pub display_name: Option<serde_json::Value>,
+    // pub notice: Option<serde_json::Value>,
 }
 
 
@@ -120,14 +120,14 @@ pub struct DynamicRule {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Me {
     pub view: String,
-    pub avatar: Option<serde_json::Value>,
-    #[serde(rename = "avatarThumbs")]
-    pub avatar_thumbs: Option<serde_json::Value>,
-    pub header: Option<serde_json::Value>,
-    #[serde(rename = "headerSize")]
-    pub header_size: Option<serde_json::Value>,
-    #[serde(rename = "headerThumbs")]
-    pub header_thumbs: Option<serde_json::Value>,
+    // pub avatar: Option<Avatar>,
+    // #[serde(rename = "avatarThumbs")]
+    // pub avatar_thumbs: Option<serde_json::Value>,
+    // pub header: Option<serde_json>,
+    // #[serde(rename = "headerSize")]
+    // pub header_size: Option<serde_json::Value>,
+    // #[serde(rename = "headerThumbs")]
+    // pub header_thumbs: Option<serde_json::Value>,
     pub id: i64,
     pub name: String,
     pub username: String,
@@ -169,9 +169,9 @@ pub struct Me {
     pub about: String,
     #[serde(rename = "rawAbout")]
     pub raw_about: String,
-    pub website: Option<serde_json::Value>,
-    pub wishlist: Option<serde_json::Value>,
-    pub location: Option<serde_json::Value>,
+    // pub website: Option<serde_json::Value>,
+    // pub wishlist: Option<serde_json::Value>,
+    // pub location: Option<serde_json::Value>,
     #[serde(rename = "postsCount")]
     pub posts_count: i64,
     #[serde(rename = "archivedPostsCount")]
@@ -184,8 +184,8 @@ pub struct Me {
     pub audios_count: i64,
     #[serde(rename = "mediasCount")]
     pub medias_count: i64,
-    #[serde(rename = "lastSeen")]
-    pub last_seen: Option<serde_json::Value>,
+    // #[serde(rename = "lastSeen")]
+    // pub last_seen: Option<serde_json::Value>,
     #[serde(rename = "favoritesCount")]
     pub favorites_count: i64,
     #[serde(rename = "favoritedCount")]
@@ -208,10 +208,10 @@ pub struct Me {
     pub can_chat: bool,
     #[serde(rename = "canAddPhone")]
     pub can_add_phone: bool,
-    #[serde(rename = "phoneLast4")]
-    pub phone_last4: Option<serde_json::Value>,
-    #[serde(rename = "phoneMask")]
-    pub phone_mask: Option<serde_json::Value>,
+    // #[serde(rename = "phoneLast4")]
+    // pub phone_last4: Option<serde_json::Value>,
+    // #[serde(rename = "phoneMask")]
+    // pub phone_mask: Option<serde_json::Value>,
     #[serde(rename = "hasNewTicketReplies")]
     pub has_new_ticket_replies: HasNewTicketReplies,
     #[serde(rename = "hasInternalPayments")]
@@ -235,8 +235,8 @@ pub struct Me {
     pub is_legal_approved_allowed: bool,
     #[serde(rename = "isTwitterConnected")]
     pub is_twitter_connected: bool,
-    #[serde(rename = "twitterUsername")]
-    pub twitter_username: Option<serde_json::Value>,
+    // #[serde(rename = "twitterUsername")]
+    // pub twitter_username: Option<serde_json::Value>,
     #[serde(rename = "isAllowTweets")]
     pub is_allow_tweets: bool,
     #[serde(rename = "isPaymentCardConnected")]
@@ -263,8 +263,8 @@ pub struct Me {
     pub is_want_comments: bool,
     #[serde(rename = "watermarkText")]
     pub watermark_text: String,
-    #[serde(rename = "customWatermarkText")]
-    pub custom_watermark_text: Option<serde_json::Value>,
+    // #[serde(rename = "customWatermarkText")]
+    // pub custom_watermark_text: Option<serde_json::Value>,
     #[serde(rename = "hasWatermarkPhoto")]
     pub has_watermark_photo: bool,
     #[serde(rename = "hasWatermarkVideo")]
@@ -273,8 +273,8 @@ pub struct Me {
     pub can_delete: bool,
     #[serde(rename = "isTelegramConnected")]
     pub is_telegram_connected: bool,
-    #[serde(rename = "advBlock")]
-    pub adv_block: Vec<Option<serde_json::Value>>,
+    // #[serde(rename = "advBlock")]
+    // pub adv_block: Vec<Option<serde_json::Value>>,
     #[serde(rename = "hasPurchasedPosts")]
     pub has_purchased_posts: bool,
     #[serde(rename = "isEmailRequired")]
@@ -283,8 +283,8 @@ pub struct Me {
     pub is_payout_legal_approved: bool,
     #[serde(rename = "payoutLegalApproveState")]
     pub payout_legal_approve_state: String,
-    #[serde(rename = "payoutLegalApproveRejectReason")]
-    pub payout_legal_approve_reject_reason: Option<serde_json::Value>,
+    // #[serde(rename = "payoutLegalApproveRejectReason")]
+    // pub payout_legal_approve_reject_reason: Option<serde_json::Value>,
     #[serde(rename = "enabledImageEditorForChat")]
     pub enabled_image_editor_for_chat: bool,
     #[serde(rename = "shouldReceiveLessNotifications")]
@@ -319,20 +319,20 @@ pub struct Me {
     pub need_iv_approve: bool,
     #[serde(rename = "ivStatus")]
     pub iv_status: String,
-    #[serde(rename = "ivFailReason")]
-    pub iv_fail_reason: Option<serde_json::Value>,
+    // #[serde(rename = "ivFailReason")]
+    // pub iv_fail_reason: Option<serde_json::Value>,
     #[serde(rename = "canCheckDocsOnAddCard")]
     pub can_check_docs_on_add_card: bool,
     #[serde(rename = "faceIdAvailable")]
     pub face_id_available: bool,
-    #[serde(rename = "ivCountry")]
-    pub iv_country: Option<serde_json::Value>,
+    // #[serde(rename = "ivCountry")]
+    // pub iv_country: Option<serde_json::Value>,
     #[serde(rename = "ivForcedVerified")]
     pub iv_forced_verified: bool,
     #[serde(rename = "ivFlow")]
     pub iv_flow: String,
-    #[serde(rename = "connectedOfAccounts")]
-    pub connected_of_accounts: Vec<Option<serde_json::Value>>,
+    // #[serde(rename = "connectedOfAccounts")]
+    // pub connected_of_accounts: Vec<Option<serde_json::Value>>,
     #[serde(rename = "hasPassword")]
     pub has_password: bool,
     #[serde(rename = "canConnectOfAccount")]
@@ -399,12 +399,12 @@ pub struct SubscribedByData {
     pub subscribe_at: String,
     #[serde(rename = "expiredAt")]
     pub expired_at: String,
-    #[serde(rename = "renewedAt")]
-    pub renewed_at: Option<serde_json::Value>,
-    #[serde(rename = "discountFinishedAt")]
-    pub discount_finished_at: Option<serde_json::Value>,
-    #[serde(rename = "discountStartedAt")]
-    pub discount_started_at: Option<serde_json::Value>,
+    // #[serde(rename = "renewedAt")]
+    // pub renewed_at: Option<serde_json::Value>,
+    // #[serde(rename = "discountFinishedAt")]
+    // pub discount_finished_at: Option<serde_json::Value>,
+    // #[serde(rename = "discountStartedAt")]
+    // pub discount_started_at: Option<serde_json::Value>,
     pub status: String,
     #[serde(rename = "isMuted")]
     pub is_muted: bool,
@@ -429,8 +429,8 @@ pub struct Subscribe {
     pub start_date: String,
     #[serde(rename = "expireDate")]
     pub expire_date: String,
-    #[serde(rename = "cancelDate")]
-    pub cancel_date: Option<serde_json::Value>,
+    // #[serde(rename = "cancelDate")]
+    // pub cancel_date: Option<serde_json::Value>,
     pub price: i64,
     #[serde(rename = "regularPrice")]
     pub regular_price: f64,
@@ -442,8 +442,8 @@ pub struct Subscribe {
     pub subscribe_type: String,
     #[serde(rename = "offerStart")]
     pub offer_start: Option<String>,
-    #[serde(rename = "offerEnd")]
-    pub offer_end: Option<serde_json::Value>,
+    // #[serde(rename = "offerEnd")]
+    // pub offer_end: Option<serde_json::Value>,
     #[serde(rename = "isCurrent")]
     pub is_current: bool,
 }
@@ -467,11 +467,11 @@ pub struct SubscribedOnData {
     pub expired_at: String,
     #[serde(rename = "renewedAt")]
     pub renewed_at: String,
-    #[serde(rename = "discountFinishedAt")]
-    pub discount_finished_at: Option<serde_json::Value>,
-    #[serde(rename = "discountStartedAt")]
-    pub discount_started_at: Option<serde_json::Value>,
-    pub status: Option<serde_json::Value>,
+    // #[serde(rename = "discountFinishedAt")]
+    // pub discount_finished_at: Option<serde_json::Value>,
+    // #[serde(rename = "discountStartedAt")]
+    // pub discount_started_at: Option<serde_json::Value>,
+    // pub status: Option<serde_json::Value>,
     #[serde(rename = "isMuted")]
     pub is_muted: bool,
     #[serde(rename = "unsubscribeReason")]
