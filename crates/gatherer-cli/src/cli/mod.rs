@@ -8,8 +8,8 @@ use structopt::StructOpt;
 pub struct Cli {
     #[structopt(short, long)]
     pub config_file_path: Option<PathBuf>,
-    #[structopt(short, long)]
-    pub verbose: bool,
+    #[structopt(short, parse(from_occurrences))]
+    pub verbose: u8,
     #[structopt(long)]
     pub content_types: Option<ContentTypes>,
 }

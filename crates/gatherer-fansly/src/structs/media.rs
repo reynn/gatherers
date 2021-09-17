@@ -1,4 +1,7 @@
+use std::convert::TryFrom;
+
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Media {
@@ -7,25 +10,41 @@ pub struct Media {
     pub account_id: String,
     #[serde(rename = "previewId")]
     pub preview_id: Option<String>,
-    #[serde(rename = "permissionFlags")]
-    pub permission_flags: i64,
-    pub price: i64,
+    pub price: Option<i64>,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     #[serde(rename = "deletedAt")]
     pub deleted_at: Option<String>,
+    #[serde(default)]
     pub deleted: bool,
-    pub permissions: Permissions,
-    pub details: MediaDetails,
+    #[serde(rename = "media")]
+    pub details: Option<MediaDetails>,
+    #[serde(default)]
     pub purchased: bool,
+    #[serde(default)]
     pub whitelisted: bool,
-    #[serde(rename = "accountPermissionFlags")]
+    #[serde(rename = "accountPermissionFlags", default)]
     pub account_permission_flags: i64,
+    #[serde(default)]
     pub access: bool,
-    pub preview: Option<MediaDetails>,
-    pub whitelist: Option<Vec<Whitelist>>,
     #[serde(rename = "likeCount")]
     pub like_count: Option<i64>,
+}
+
+impl TryFrom<MediaDetails> for gatherer_core::gatherers::Media {
+    type Error = String;
+
+    fn try_from(details: MediaDetails) -> Result<Self, Self::Error> {
+        if details.locations.is_empty() {
+            return Err(format!("Content not available: {:?}", details));
+        }
+
+        Ok(Self {
+            filename: details.filename.to_string(),
+            url: details.locations[0].location.to_string(),
+            mime_type: details.mimetype,
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,8 +65,6 @@ pub struct MediaDetails {
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     pub variants: Vec<Variant>,
-    #[serde(rename = "variantHash")]
-    pub variant_hash: VariantHash,
     pub locations: Vec<Location>,
 }
 
@@ -57,9 +74,6 @@ pub struct Location {
     pub location_id: String,
     pub location: String,
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct VariantHash {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Variant {
@@ -74,42 +88,4 @@ pub struct Variant {
     #[serde(rename = "updatedAt")]
     pub updated_at: i64,
     pub locations: Vec<Location>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Permissions {
-    #[serde(rename = "permissionFlags")]
-    pub permission_flags: Vec<PermissionFlag>,
-    #[serde(rename = "accountPermissionFlags")]
-    pub account_permission_flags: AccountPermissionFlags,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AccountPermissionFlags {
-    pub flags: i64,
-    pub metadata: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PermissionFlag {
-    pub id: String,
-    #[serde(rename = "accountMediaId")]
-    pub account_media_id: String,
-    #[serde(rename = "type")]
-    pub permission_flag_type: i64,
-    pub flags: i64,
-    pub price: i64,
-    pub metadata: String,
-    #[serde(rename = "validAfter")]
-    pub valid_after: Option<i64>,
-    #[serde(rename = "validBefore")]
-    pub valid_before: Option<i64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Whitelist {
-    #[serde(rename = "accountId")]
-    pub account_id: String,
-    #[serde(rename = "permissionFlags")]
-    pub permission_flags: i64,
 }

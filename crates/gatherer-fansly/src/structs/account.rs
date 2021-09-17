@@ -28,7 +28,7 @@ pub struct Account {
     pub location: String,
     #[serde(rename = "subscriptionTiers")]
     pub subscription_tiers: Vec<SubscriptionTier>,
-    pub avatar: Avatar,
+    pub avatar: Option<Avatar>,
     pub banner: Option<Avatar>,
     #[serde(rename = "postLikes")]
     pub post_likes: i64,
@@ -144,15 +144,15 @@ pub struct TimelineStats {
     #[serde(rename = "accountId")]
     pub account_id: String,
     #[serde(rename = "imageCount")]
-    pub image_count: i64,
+    pub image_count: i32,
     #[serde(rename = "videoCount")]
-    pub video_count: i64,
+    pub video_count: i32,
     #[serde(rename = "bundleCount")]
-    pub bundle_count: i64,
+    pub bundle_count: i32,
     #[serde(rename = "bundleImageCount")]
-    pub bundle_image_count: i64,
+    pub bundle_image_count: i32,
     #[serde(rename = "bundleVideoCount")]
-    pub bundle_video_count: i64,
+    pub bundle_video_count: i32,
     #[serde(rename = "fetchedAt")]
     pub fetched_at: i64,
 }

@@ -1,13 +1,14 @@
 mod errors;
 
-use crate::{config::Config, AsyncResult, Result};
+use crate::{AsyncResult, Result};
 use chrono::prelude::*;
+use tabled::Tabled;
 pub use errors::GathererErrors;
-use std::{fmt::Display, future, ops::Deref, sync::Arc};
 
 #[async_trait::async_trait]
 pub trait Gatherer: std::fmt::Debug + Sync + Send {
     async fn gather_subscriptions(&self) -> AsyncResult<Vec<Subscription>>;
+    async fn gather_media_from_bundles(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>>;
     async fn gather_media_from_posts(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>>;
     async fn gather_media_from_messages(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>>;
     async fn gather_media_from_stories(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>>;
@@ -21,37 +22,54 @@ pub async fn run_gatherer(gatherer: &dyn Gatherer) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Tabled)]
 pub struct Post {
+    #[header(hidden = true)]
     pub id: String,
-    pub title: Option<String>,
+    pub title: String,
     pub content: String,
+    #[header(hidden = true)]
     pub media: Vec<Media>,
     pub paid: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Tabled)]
 pub struct Message {}
 
 //  This may need to get abstracted out into a multiple types of subs
-#[derive(Debug)]
+#[derive(Debug, Default, Tabled)]
 pub struct Subscription {
+    #[header(hidden = true)]
     pub id: String,
+    #[header("Name")]
     pub username: String,
+    #[header("Tier")]
     pub plan: String,
+    #[header(hidden = true)]
     pub started: DateTime,
+    #[header(hidden = true)]
     pub renewal_date: DateTime,
+    #[header(hidden = true)]
     pub rewewal_price: SubscriptionCost,
+    #[header(hidden = true)]
     pub ends_at: DateTime,
+    #[header("Videos")]
+    pub video_count: i32,
+    #[header("Images")]
+    pub image_count: i32,
+    #[header("Bundles")]
+    pub bundle_count: i32,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Tabled)]
 pub struct Media {
-    filename: String,
-    url: String,
+    pub filename: String,
+    pub mime_type: String,
+    #[header(hidden = true)]
+    pub url: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Tabled)]
 pub struct Story {}
 
 #[derive(Debug, Default)]

@@ -7,19 +7,20 @@ use reqwest::{
     Url, {Client, Request, RequestBuilder},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
+use tracing::{debug, info};
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ApiClientConfig {}
 
 #[derive(Debug, Clone)]
-pub struct ApiClient<'a> {
-    conf: &'a ApiClientConfig,
+pub struct ApiClient {
+    conf: Arc<ApiClientConfig>,
     client: Client,
 }
 
-impl<'a> ApiClient<'a> {
-    pub fn new(conf: &'a ApiClientConfig) -> Self {
+impl ApiClient {
+    pub fn new(conf: Arc<ApiClientConfig>) -> Self {
         Self {
             client: Client::new(),
             conf,
@@ -92,19 +93,24 @@ impl<'a> ApiClient<'a> {
 
     async fn execute<T: for<'de> serde::Deserialize<'de>>(&self, req: Request) -> AsyncResult<T> {
         let url = format!("{}", req.url());
+        debug!("Making a {} request to {}", req.method(), &url,);
         match self.client.execute(req).await {
             Ok(resp) => {
+                debug!("{:#?}", resp);
                 // if we get 100->399 it should be good to go
                 let status = resp.status();
                 let body_text = resp.text().await?;
                 if status.is_success() {
-                    tracing::debug!("{} response: \n\n{}", url, body_text);
+                    debug!("{} response: \n\n{}", url, body_text);
                     match serde_json::from_str(&body_text[..]) {
                         Ok(json_resp) => Ok(json_resp),
-                        Err(json_err) => Err(Box::new(errors::HttpErrors::JsonError(json_err))),
+                        Err(json_err) => {
+                            info!("Failed to create proper response body from JSON returned from {}. {:?}", url, json_err);
+                            Err(Box::new(errors::HttpErrors::JsonError(json_err)))
+                        }
                     }
                 } else {
-                    tracing::error!("{}", body_text);
+                    debug!("{}", body_text);
                     Err(Box::new(errors::HttpErrors::BadStatus {
                         status_code: status.as_u16(),
                         body: body_text,

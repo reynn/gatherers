@@ -1,3 +1,6 @@
+// Turn off common dev assertions only for debug builds, release builds will still work as normal
+#![cfg_attr(debug_assertions, allow(dead_code, unused_imports, unused_variables))]
+
 mod responses;
 mod structs;
 
@@ -7,7 +10,7 @@ use gatherer_core::{
     AsyncResult, Result,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 // self.subscriptions = f"https://onlyfans.com/api2/v2/subscriptions/subscribes?limit={global_limit}&offset={global_offset}&type=active"
 // self.lists = f"https://onlyfans.com/api2/v2/lists?limit=100&offset=0"
@@ -41,26 +44,26 @@ const ONLYFANS_MFA_URL: &str = "https://onlyfans.com/api2/v2/users/otp/check";
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct OnlyFansConfig {
-    pub(crate) enabled: bool,
-    pub(crate) session_token: String,
-    pub(crate) user_agent: String,
-    pub(crate) app_token: String,
-    pub(crate) user_id: String,
-    pub(crate) cookie: String,
-    pub(crate) ignore_lists: Vec<String>,
+    pub enabled: bool,
+    pub session_token: String,
+    pub user_agent: String,
+    pub app_token: String,
+    pub user_id: String,
+    pub cookie: String,
+    pub ignore_lists: Vec<String>,
 }
 
 #[derive(Debug)]
-pub struct OnlyFans<'a> {
-    config: &'a OnlyFansConfig,
-    http_client: ApiClient<'a>,
+pub struct OnlyFans {
+    config: Arc<OnlyFansConfig>,
+    http_client: ApiClient,
 }
 
-impl<'a> OnlyFans<'a> {
+impl OnlyFans {
     pub async fn new(
-        of_conf: &'a OnlyFansConfig,
-        api_conf: &'a ApiClientConfig,
-    ) -> AsyncResult<OnlyFans<'a>> {
+        of_conf: Arc<OnlyFansConfig>,
+        api_conf: Arc<ApiClientConfig>,
+    ) -> AsyncResult<OnlyFans> {
         if !of_conf.enabled {
             return Err(Box::new(GathererErrors::NotEnabled {
                 name: String::from("OnlyFans"),
@@ -115,7 +118,7 @@ impl<'a> OnlyFans<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> Gatherer for OnlyFans<'a> {
+impl Gatherer for OnlyFans {
     async fn gather_subscriptions(&self) -> AsyncResult<Vec<Subscription>> {
         todo!()
     }
@@ -129,6 +132,10 @@ impl<'a> Gatherer for OnlyFans<'a> {
     }
 
     async fn gather_media_from_stories(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
+        todo!()
+    }
+    
+    async fn gather_media_from_bundles(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
         todo!()
     }
 

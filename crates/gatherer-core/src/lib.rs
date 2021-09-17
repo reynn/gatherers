@@ -1,4 +1,6 @@
-pub mod config;
+// Turn off common dev assertions only for debug builds, release builds will still work as normal
+#![cfg_attr(debug_assertions, allow(dead_code, unused_imports, unused_variables))]
+
 pub mod directories;
 pub mod downloaders;
 pub mod errors;

@@ -1,16 +1,34 @@
 use serde::{Deserialize, Serialize};
-// Example code that deserializes and serializes the model.
-// extern crate serde;
-// #[macro_use]
-// extern crate serde_derive;
-// extern crate serde_json;
-//
-// use generated_module::[object Object];
-//
-// fn main() {
-//     let json = r#"{"answer": 42}"#;
-//     let model: [object Object] = serde_json::from_str(&json).unwrap();
-// }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Post {
+    pub id: String,
+    #[serde(rename = "accountId")]
+    pub account_id: String,
+    pub content: String,
+    #[serde(rename = "inReplyTo")]
+    pub in_reply_to: Option<i64>,
+    #[serde(rename = "inReplyToRoot")]
+    pub in_reply_to_root: Option<i64>,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<i64>,
+    pub attachments: Vec<Attachment>,
+    #[serde(rename = "likeCount", default)]
+    pub like_count: i64,
+    #[serde(rename = "mediaLikeCount")]
+    pub media_like_count: i64,
+    #[serde(rename = "totalTipAmount")]
+    pub total_tip_amount: i64,
+    #[serde(rename = "attachmentTipAmount")]
+    pub attachment_tip_amount: i64,
+    #[serde(rename = "accountMentions")]
+    pub account_mentions: Vec<Mention>,
+    #[serde(rename = "replyCount")]
+    pub reply_count: Option<i64>,
+    pub liked: Option<bool>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountMedia {
@@ -280,33 +298,12 @@ pub struct Wall {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Post {
-    pub id: String,
+pub struct Mention {
+    pub start: i32,
+    pub end: i32,
+    pub handle: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
-    pub content: String,
-    #[serde(rename = "inReplyTo")]
-    pub in_reply_to: Option<i64>,
-    #[serde(rename = "inReplyToRoot")]
-    pub in_reply_to_root: Option<i64>,
-    #[serde(rename = "createdAt")]
-    pub created_at: i64,
-    #[serde(rename = "expiresAt")]
-    pub expires_at: Option<i64>,
-    pub attachments: Vec<Attachment>,
-    #[serde(rename = "likeCount")]
-    pub like_count: i64,
-    #[serde(rename = "mediaLikeCount")]
-    pub media_like_count: i64,
-    #[serde(rename = "totalTipAmount")]
-    pub total_tip_amount: i64,
-    #[serde(rename = "attachmentTipAmount")]
-    pub attachment_tip_amount: i64,
-    #[serde(rename = "accountMentions")]
-    pub account_mentions: Vec<Option<String>>,
-    #[serde(rename = "replyCount")]
-    pub reply_count: Option<i64>,
-    pub liked: Option<bool>,
+    pub account_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
