@@ -12,6 +12,8 @@ pub struct Cli {
     pub verbose: u8,
     #[structopt(long)]
     pub content_types: Option<ContentTypes>,
+    #[structopt(short, long)]
+    pub download_to: Option<PathBuf>,
 }
 
 #[derive(Debug, StructOpt)]

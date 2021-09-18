@@ -2,7 +2,7 @@ mod errors;
 
 pub use errors::ConfigErrors;
 use gatherer_core::{
-    directories::Directories, downloaders::DownloadersConfig, http::ApiClientConfig,
+    directories::Directories, downloaders::DownloaderConfig, http::ApiClientConfig,
 };
 use gatherer_fansly::FanslyConfig;
 use gatherer_onlyfans::OnlyFansConfig;
@@ -16,9 +16,10 @@ pub type Result<T, E = errors::ConfigErrors> = std::result::Result<T, E>;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
+    // #[serde(skip)]
     pub config_dir: String,
     pub api_config: ApiClientConfig,
-    pub downloaders: DownloadersConfig,
+    pub downloaders: DownloaderConfig,
     pub fansly: FanslyConfig,
     pub only_fans: OnlyFansConfig,
 }
@@ -70,7 +71,7 @@ impl Default for Config {
         Self {
             config_dir: String::from(config_directory.to_str().unwrap_or_default()),
             api_config: ApiClientConfig::default(),
-            downloaders: DownloadersConfig::default(),
+            downloaders: DownloaderConfig::default(),
             fansly: FanslyConfig::default(),
             only_fans: OnlyFansConfig::default(),
         }

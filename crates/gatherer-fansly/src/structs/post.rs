@@ -81,7 +81,7 @@ pub struct Avatar {
     pub height: i64,
     pub metadata: String,
     #[serde(rename = "updatedAt")]
-    pub updated_at: i64,
+    pub updated_at: Option<i64>,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     pub variants: Vec<Variant>,

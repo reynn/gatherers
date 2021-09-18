@@ -1,9 +1,14 @@
 mod errors;
 
-use crate::{AsyncResult, Result};
+use std::{fmt::Display, path::PathBuf};
+
+use crate::{
+    downloaders::{Downloadable, DownloaderConfig},
+    AsyncResult, Result,
+};
 use chrono::prelude::*;
-use tabled::Tabled;
 pub use errors::GathererErrors;
+use tabled::Tabled;
 
 #[async_trait::async_trait]
 pub trait Gatherer: std::fmt::Debug + Sync + Send {
@@ -42,7 +47,7 @@ pub struct Subscription {
     #[header(hidden = true)]
     pub id: String,
     #[header("Name")]
-    pub username: String,
+    pub name: SubscriptionName,
     #[header("Tier")]
     pub plan: String,
     #[header(hidden = true)]
@@ -61,9 +66,26 @@ pub struct Subscription {
     pub bundle_count: i32,
 }
 
+#[derive(Debug, Default)]
+pub struct SubscriptionName {
+    pub username: String,
+    pub display_name: Option<String>,
+}
+
+impl Display for SubscriptionName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match &self.display_name {
+            Some(display_name) => &display_name[..],
+            None => &self.username[..],
+        };
+        write!(f, "{}", name)
+    }
+}
+
 #[derive(Debug, Default, Tabled)]
 pub struct Media {
     pub filename: String,
+    pub paid: bool,
     pub mime_type: String,
     #[header(hidden = true)]
     pub url: String,

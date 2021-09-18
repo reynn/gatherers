@@ -13,3 +13,4 @@ Cargo.lock
 *.log
 
 **/examples/
+fansly/

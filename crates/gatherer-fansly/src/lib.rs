@@ -8,7 +8,7 @@ mod structs;
 pub use self::gatherer::*;
 use chrono::prelude::*;
 use gatherer_core::{
-    gatherers::{Gatherer, GathererErrors, Subscription},
+    gatherers::{Gatherer, GathererErrors, Subscription, SubscriptionName},
     http::{ApiClient, ApiClientConfig},
     AsyncResult,
 };
@@ -73,30 +73,39 @@ impl Fansly {
         Ok(self.http_client.get(&endpoint, None).await?)
     }
 
-    pub async fn get_media_by_ids(
-        &self,
-        media_ids: &[String],
-    ) -> AsyncResult<Vec<structs::Media>> {
-        let endpoint = format!("{}?ids={}", FANSLY_API_MEDIA_URL, media_ids.join(","));
-        let media = self
-            .http_client
-            .get::<responses::MediaResponse>(&endpoint, self.get_default_headers())
-            .await;
-
-        match media {
-            Ok(response) => {
-                debug!("Media Response {:#?}\n", response.response);
-                Ok(response.response)
-            }
-            Err(err) => {
-                error!("Failed to download media info due to {}", err);
-                Err(err)
+    pub async fn get_media_by_ids(&self, media_ids: &[String]) -> AsyncResult<Vec<structs::Media>> {
+        let mut returned_media = Vec::new();
+        for chunks_ids in media_ids.chunks(100) {
+            info!("Attempting to get {} media files", chunks_ids.len());
+            let endpoint = format!("{}?ids={}", FANSLY_API_MEDIA_URL, chunks_ids.join(","));
+            let media = self
+                .http_client
+                .get::<responses::MediaResponse>(&endpoint, self.get_default_headers())
+                .await;
+            match media {
+                Ok(mut response) => {
+                    debug!("Media Response {:#?}\n", response.response);
+                    returned_media.append(&mut response.response);
+                    // Some(response.response)
+                }
+                Err(err) => {
+                    error!("Failed to download media info due to {}", err);
+                    // None
+                }
             }
         }
+        Ok(returned_media)
     }
 
-    pub async fn get_media_bundles_by_ids(&self, bundle_ids: &[String]) -> AsyncResult<Vec<structs::MediaBundle>> {
-        let endpoint = format!("{}?ids={}", FANSLY_API_MEDIA_BUNDLE_URL, bundle_ids.join(","));
+    pub async fn get_media_bundles_by_ids(
+        &self,
+        bundle_ids: &[String],
+    ) -> AsyncResult<Vec<structs::MediaBundle>> {
+        let endpoint = format!(
+            "{}?ids={}",
+            FANSLY_API_MEDIA_BUNDLE_URL,
+            bundle_ids.join(",")
+        );
         let bundles = self
             .http_client
             .get::<responses::MediaBundleResponse>(&endpoint, self.get_default_headers())
@@ -235,14 +244,13 @@ fn combine_subs_and_account_info(
             let account_info = accounts.iter().find(|c| c.id == sub.account_id);
             match account_info {
                 Some(info) => {
-                    let username = match &info.display_name {
-                        Some(name) => String::from(name),
-                        None => String::from(&info.username),
-                    };
                     let stats = &info.timeline_stats;
                     Some(Subscription {
                         id: info.id.to_string(),
-                        username,
+                        name: SubscriptionName {
+                            username: info.username.to_string(),
+                            display_name: info.display_name.to_owned(),
+                        },
                         plan: sub.subscription_tier_name.to_string(),
                         started: Utc.timestamp_millis(sub.created_at).into(),
                         renewal_date: Utc.timestamp_millis(sub.renew_date).into(),

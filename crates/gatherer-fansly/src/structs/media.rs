@@ -31,19 +31,23 @@ pub struct Media {
     pub like_count: Option<i64>,
 }
 
-impl TryFrom<MediaDetails> for gatherer_core::gatherers::Media {
+impl TryFrom<Media> for gatherer_core::gatherers::Media {
     type Error = String;
 
-    fn try_from(details: MediaDetails) -> Result<Self, Self::Error> {
-        if details.locations.is_empty() {
-            return Err(format!("Content not available: {:?}", details));
+    fn try_from(media: Media) -> Result<Self, Self::Error> {
+        if let Some(details) = media.details {
+            if details.locations.is_empty() {
+                return Err(format!("Content not available: {:?}", details));
+            }
+            Ok(Self {
+                filename: details.filename.to_string(),
+                url: details.locations[0].location.to_string(),
+                mime_type: details.mimetype,
+                paid: media.purchased,
+            })
+        } else {
+            Err(format!("Content not available: {:?}", media))
         }
-
-        Ok(Self {
-            filename: details.filename.to_string(),
-            url: details.locations[0].location.to_string(),
-            mime_type: details.mimetype,
-        })
     }
 }
 
@@ -86,6 +90,6 @@ pub struct Variant {
     pub width: i64,
     pub height: i64,
     #[serde(rename = "updatedAt")]
-    pub updated_at: i64,
+    pub updated_at: Option<i64>,
     pub locations: Vec<Location>,
 }
