@@ -5,6 +5,8 @@ mod gatherer;
 mod responses;
 mod structs;
 
+use crate::structs::Message;
+
 pub use self::gatherer::*;
 use chrono::prelude::*;
 use gatherer_core::{
@@ -24,6 +26,8 @@ const FANSLY_API_TIMELINE_URL: &str = "https://apiv2.fansly.com/api/v1/timeline"
 const FANSLY_API_MEDIA_URL: &str = "https://apiv2.fansly.com/api/v1/account/media";
 const FANSLY_API_MEDIA_BUNDLE_URL: &str = "https://apiv2.fansly.com/api/v1/account/media/bundle";
 const FANSLY_API_WALL_URL: &str = "https://apiv2.fansly.com/api/v1/wall/";
+const FANSLY_API_MESSAGE_GROUPS_URL: &str = "https://apiv2.fansly.com/api/v1/group";
+const FANSLY_API_GROUP_MESSAGES_URL: &str = "https://apiv2.fansly.com/api/v1/message";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FanslyConfig {
@@ -75,8 +79,11 @@ impl Fansly {
 
     pub async fn get_media_by_ids(&self, media_ids: &[String]) -> AsyncResult<Vec<structs::Media>> {
         let mut returned_media = Vec::new();
+        if media_ids.is_empty() {
+            return Ok(Vec::new())
+        }
+        info!("Attempting to get {} media files", media_ids.len());
         for chunks_ids in media_ids.chunks(100) {
-            info!("Attempting to get {} media files", chunks_ids.len());
             let endpoint = format!("{}?ids={}", FANSLY_API_MEDIA_URL, chunks_ids.join(","));
             let media = self
                 .http_client
@@ -119,8 +126,8 @@ impl Fansly {
     pub async fn get_posts_by_user_id(
         &self,
         account_id: &'_ str,
-    ) -> AsyncResult<Vec<responses::PostsInner>> {
-        let mut posts: Vec<responses::PostsInner> = Vec::new();
+    ) -> AsyncResult<Vec<responses::inner::Posts>> {
+        let mut posts: Vec<responses::inner::Posts> = Vec::new();
         let mut more_pages = true;
         let mut offset: usize = 0;
         let mut before_post_id = String::new();
@@ -209,6 +216,46 @@ impl Fansly {
         }
     }
 
+    pub async fn get_messages_groups(&self) -> AsyncResult<Vec<structs::MessageGroup>> {
+        let all_groups_resp: AsyncResult<responses::MessageGroupsResponse> = self
+            .http_client
+            .get(FANSLY_API_MESSAGE_GROUPS_URL, self.get_default_headers())
+            .await;
+        match all_groups_resp {
+            Ok(resp) => Ok(resp.response.groups),
+            Err(groups_err) => Err(format!("{:?}", groups_err).into()),
+        }
+    }
+
+    pub async fn get_all_messages_from_group(
+        &self,
+        group_id: &'_ str,
+    ) -> AsyncResult<Vec<Message>> {
+        let endpoint = format!(
+            "{}?groupId={}&limit={}",
+            FANSLY_API_GROUP_MESSAGES_URL, &group_id, 50
+        );
+        // let mut messages: Vec<Message> = Vec::new();
+        // while more_pages {
+        let resp_res: AsyncResult<responses::GroupMessagesResponse> = self
+            .http_client
+            .get(&endpoint, self.get_default_headers())
+            .await;
+
+        match resp_res {
+            Ok(resp) => {
+                debug!("Response for thread {}. {:#?}", group_id, resp.response);
+                Ok(resp.response.messages)
+            }
+            Err(message_err) => Err(format!(
+                "Failed to get messages from group {}. {:?}",
+                group_id, message_err,
+            )
+            .into()),
+        }
+        // Ok(Vec::new())
+    }
+
     pub async fn validate_auth_token(&self) -> AsyncResult<&Fansly> {
         if self.conf.auth_token.is_empty() {
             return Err(Box::new(GathererErrors::InvalidCredentials {
@@ -244,7 +291,14 @@ fn combine_subs_and_account_info(
             let account_info = accounts.iter().find(|c| c.id == sub.account_id);
             match account_info {
                 Some(info) => {
-                    let stats = &info.timeline_stats;
+                    let mut video_count = 0;
+                    let mut image_count = 0;
+                    let mut bundle_count = 0;
+                    if let Some(stats) = &info.timeline_stats {
+                        video_count = stats.video_count;
+                        image_count = stats.image_count;
+                        bundle_count = stats.bundle_count;
+                    };
                     Some(Subscription {
                         id: info.id.to_string(),
                         name: SubscriptionName {
@@ -252,13 +306,13 @@ fn combine_subs_and_account_info(
                             display_name: info.display_name.to_owned(),
                         },
                         plan: sub.subscription_tier_name.to_string(),
-                        started: Utc.timestamp_millis(sub.created_at).into(),
-                        renewal_date: Utc.timestamp_millis(sub.renew_date).into(),
+                        started: Some(Utc.timestamp_millis(sub.created_at).into()),
+                        renewal_date: Some(Utc.timestamp_millis(sub.renew_date).into()),
                         rewewal_price: sub.price.into(),
-                        ends_at: Utc.timestamp_millis(sub.ends_at).into(),
-                        video_count: stats.video_count,
-                        image_count: stats.image_count,
-                        bundle_count: stats.bundle_count,
+                        ends_at: Some(Utc.timestamp_millis(sub.ends_at).into()),
+                        video_count,
+                        image_count,
+                        bundle_count,
                     })
                 }
                 None => None,

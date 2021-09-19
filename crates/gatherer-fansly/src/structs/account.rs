@@ -15,7 +15,7 @@ pub struct Account {
     #[serde(rename = "subscriberCount")]
     pub subscriber_count: i64,
     #[serde(rename = "timelineStats")]
-    pub timeline_stats: TimelineStats,
+    pub timeline_stats: Option<TimelineStats>,
     #[serde(rename = "statusId")]
     pub status_id: i64,
     #[serde(rename = "lastSeenAt")]
@@ -27,7 +27,7 @@ pub struct Account {
     pub about: String,
     pub location: String,
     #[serde(rename = "subscriptionTiers")]
-    pub subscription_tiers: Vec<SubscriptionTier>,
+    pub subscription_tiers: Option<Vec<SubscriptionTier>>,
     pub avatar: Option<Avatar>,
     pub banner: Option<Avatar>,
     #[serde(rename = "postLikes")]

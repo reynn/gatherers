@@ -20,7 +20,7 @@ use std::{
 };
 use tabled::{Style, Table};
 use tokio::join;
-use tracing::{debug, error, info, subscriber, Level};
+use tracing::{debug, error, info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
@@ -89,6 +89,7 @@ async fn run() -> Result<()> {
     // Initialize our downloader
     let downloader = Downloader::new(&config.downloaders);
 
+    let downloader_channel = downloader.sender.clone();
     let downloads_directory = if let Some(cli_download_dir) = &cli.download_to {
         cli_download_dir.to_owned()
     } else if let Some(config_download_dir) = &config.downloaders.storage_dir {
@@ -99,12 +100,26 @@ async fn run() -> Result<()> {
     // Go through all gatherers and run through a sequence of requests to scrape data from the provider APIs
     for gatherer in gatherers.into_iter() {
         let gatherer_name = gatherer.name();
+        let config = Arc::clone(&config);
         println!("Getting subscriptions for {}", gatherer_name);
+        let gatherer_downloads_directory = downloads_directory
+            .clone()
+            .join(gatherer_name.to_lowercase());
         // Get a list of subscriptions
+        let downloader = downloader_channel.clone();
         // tokio::spawn(async move {
         match gatherer.gather_subscriptions().await {
             Ok(subs) => {
-                let config = Arc::clone(&config);
+                if subs.is_empty() {
+                    return Err(format!("No subscriptions for {}", gatherer_name).into());
+                };
+                // let subs = subs.into_iter().take(5).collect::<Vec<_>>();
+                println!(
+                    "Found {} subs for {}\n{}",
+                    subs.len(),
+                    gatherer_name,
+                    Table::new(&subs).with(Style::pseudo_clean())
+                );
                 info!(
                     "Found subscription ids: {}",
                     subs.iter()
@@ -112,121 +127,77 @@ async fn run() -> Result<()> {
                         .collect::<Vec<&str>>()
                         .join(",")
                 );
-                if subs.is_empty() {
-                    return Err(format!("No subscriptions for {}", gatherer_name).into());
-                };
-                println!(
-                    "Found {} subs for {}\n{}",
-                    subs.len(),
-                    gatherer_name,
-                    Table::new(&subs).with(Style::pseudo_clean())
-                );
-                let subs: Vec<gatherers::Subscription> = subs.into_iter().take(10).collect();
-                for sub in subs.iter() {
-                    let subscription_downloads_directory = downloads_directory
-                        .join(gatherer_name.to_lowercase())
-                        .join(&sub.name.username.to_lowercase());
+                for sub in subs {
+                    let subscription_downloads_directory =
+                        gatherer_downloads_directory.join(&sub.name.username.to_lowercase());
                     println!(
                         "{} is getting data for subscriber: {}",
                         gatherer_name, sub.name
                     );
-
-                    let posts_media = gatherer.gather_media_from_posts(sub);
-                    let messages_media = gatherer.gather_media_from_messages(sub);
-                    let stories_media = gatherer.gather_media_from_stories(sub);
-                    let bundles_media = gatherer.gather_media_from_bundles(sub);
-
-                    let (posts, messages, stories, bundles) =
-                        join!(posts_media, messages_media, stories_media, bundles_media);
-                    match posts {
-                        Ok(posts) => {
-                            if !posts.is_empty() {
-                                println!(
-                                    "\tFound {} items from posts.\n",
-                                    posts.len(),
-                                    // Table::new(&posts).with(Style::pseudo_clean())
-                                );
-                                let downloadables = posts
-                                    .into_iter()
-                                    .map(|post_media| {
-                                        let downloadable_path = subscription_downloads_directory
-                                            .clone()
-                                            .join(if post_media.paid { "paid" } else { "free" });
-                                        Downloadable::from_media_with_path(
-                                            post_media,
-                                            downloadable_path,
-                                        )
-                                    })
-                                    .collect();
-                                match downloader.add_downloadables(downloadables).await {
-                                    Ok(_) => info!("Successfully sent post content items to the download queue"),
-                                    Err(err) => error!("Failed to send items to the queue: {}", err),
+                    let sub_gatherer = gatherer.clone();
+                    let downloader = downloader.clone();
+                    tokio::spawn(async move {
+                        let gatherer_name = sub_gatherer.name();
+                        match gatherers::run_gatherer_for_subscription(sub_gatherer, &sub).await {
+                            Ok(medias) => {
+                                let response = Downloader::add_downloadables(
+                                    downloader,
+                                    medias
+                                        .into_iter()
+                                        .take(10)
+                                        .map(|media| {
+                                            let downloadable_path =
+                                                subscription_downloads_directory
+                                                    .clone()
+                                                    .join(if media.paid { "paid" } else { "free" });
+                                            Downloadable::from_media_with_path(
+                                                &media,
+                                                downloadable_path,
+                                            )
+                                        })
+                                        .collect(),
+                                )
+                                .await;
+                                match response {
+                                    Ok(_) => {
+                                        info!("Successfully sent post content items to the download queue");
+                                    }
+                                    Err(err) => {
+                                        error!("Failed to send items to the queue: {}", err);
+                                    }
                                 };
-                            } else {
-                                info!("\tNo posts");
                             }
+                            Err(gatherer_err) => error!(
+                                "The {} gatherer was unable to get subscriptions. {:?}",
+                                gatherer_name, gatherer_err
+                            ),
                         }
-                        Err(e) => println!("\tError getting : {}", e),
-                    };
-                    match messages {
-                        Ok(messages) => {
-                            if !messages.is_empty() {
-                                println!(
-                                    "\tFound {} items from messages.\n",
-                                    messages.len(),
-                                    // Table::new(&messages).with(Style::pseudo_clean())
-                                )
-                            } else {
-                                println!("\tNo messages found.");
-                            }
-                        }
-                        Err(e) => println!("\tError getting messages: {}", e),
-                    };
-                    match stories {
-                        Ok(stories) => {
-                            if !stories.is_empty() {
-                                println!(
-                                    "\tFound {} items from stories.\n",
-                                    stories.len(),
-                                    // Table::new(&stories).with(Style::pseudo_clean())
-                                )
-                            } else {
-                                println!("\tNo stories found");
-                            }
-                        }
-                        Err(e) => println!("\tError getting stories: {}", e),
-                    };
-                    match bundles {
-                        Ok(bundles) => {
-                            if !bundles.is_empty() {
-                                println!(
-                                    "\tFound {} items from bundles.\n",
-                                    bundles.len(),
-                                    // Table::new(&bundles).with(Style::pseudo_clean())
-                                )
-                            } else {
-                                println!("\tNo bundles found");
-                            }
-                        }
-                        Err(e) => println!("\tError getting bundles: {}", e),
-                    };
+                    });
                 }
+                // Ok(())
             }
             Err(subs_err) => {
-                error!("Subscription error: {:?}", subs_err);
-                eprintln!("No subscribers found for {}. ({})", gatherer_name, subs_err)
+                eprintln!("No subscribers found for {}. ({})", gatherer_name, subs_err);
+                // Err(format!("Subscription error: {:?}", subs_err))
             }
-        };
-        println!("Gathered all from {}", gatherer_name);
+        }
         // });
     }
 
-    println!("Downloading files");
-    let receiver = downloader.receiver;
+    drop(downloader_channel);
     // tokio::spawn(async move {
-        Downloader::process_downloads(receiver).await;
+    match downloader.process_downloads().await {
+        Ok(count) => {
+            println!("Successfully downloaded {} files", count);
+            Ok(())
+        }
+        Err(download_err) => {
+            println!("Failed to process all downloads. {:?}", download_err);
+            Err(download_err)
+        }
+    }
     // });
-    Ok(())
+    // Ok(())
 }
 
 #[cfg(feature = "fansly")]
@@ -248,18 +219,21 @@ async fn add_fansly_gatherer(
 }
 
 fn init_logging(cli: &'_ Cli) {
-    println!("{:#?}", &cli);
-    let subscriber = FmtSubscriber::builder()
-        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
-        // will be written to stdout.
-        .with_max_level(match cli.verbose {
-            0 => Level::ERROR,
-            1 => Level::INFO,
-            2 => Level::DEBUG,
-            _ => Level::TRACE,
-        })
-        .pretty()
-        // completes the builder.
-        .finish();
-    subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    let tracing_level;
+    let mut tracing_subscriber_builder = FmtSubscriber::builder();
+    // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.) will be written to stdout.
+    match cli.verbose {
+        0 => tracing_level = Level::ERROR,
+        1 => tracing_level = Level::INFO,
+        2 => tracing_level = Level::DEBUG,
+        _ => tracing_level = Level::TRACE,
+    };
+    tracing_subscriber_builder = tracing_subscriber_builder.with_max_level(tracing_level);
+    // if cli.pretty {
+    // tracing_subscriber_builder = tracing_subscriber.pretty();
+    // };
+    let tracing_subscriber = tracing_subscriber_builder.finish();
+    tracing::subscriber::set_global_default(tracing_subscriber)
+        .expect("setting default subscriber failed");
+    debug!("{:#?}", &cli);
 }

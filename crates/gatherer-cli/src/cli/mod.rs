@@ -14,6 +14,8 @@ pub struct Cli {
     pub content_types: Option<ContentTypes>,
     #[structopt(short, long)]
     pub download_to: Option<PathBuf>,
+    #[structopt(long)]
+    pub pretty: bool,
 }
 
 #[derive(Debug, StructOpt)]

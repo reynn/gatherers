@@ -1,6 +1,6 @@
 mod errors;
 
-use std::{fmt::Display, path::PathBuf};
+use std::{fmt::Display, path::PathBuf, sync::Arc};
 
 use crate::{
     downloaders::{Downloadable, DownloaderConfig},
@@ -9,6 +9,7 @@ use crate::{
 use chrono::prelude::*;
 pub use errors::GathererErrors;
 use tabled::Tabled;
+use tokio::join;
 
 #[async_trait::async_trait]
 pub trait Gatherer: std::fmt::Debug + Sync + Send {
@@ -23,8 +24,86 @@ pub trait Gatherer: std::fmt::Debug + Sync + Send {
     }
 }
 
-pub async fn run_gatherer(gatherer: &dyn Gatherer) -> Result<()> {
-    Ok(())
+pub async fn run_gatherer_for_subscription(
+    gatherer: Arc<dyn Gatherer>,
+    sub: &'_ Subscription,
+) -> AsyncResult<Vec<Media>> {
+    let sub = sub.clone();
+    let posts_media = gatherer.gather_media_from_posts(&sub);
+    let messages_media = gatherer.gather_media_from_messages(&sub);
+    let stories_media = gatherer.gather_media_from_stories(&sub);
+    let bundles_media = gatherer.gather_media_from_bundles(&sub);
+
+    let mut all_media: Vec<Media> = Vec::new();
+
+    let (posts, messages, stories, bundles) =
+        join!(posts_media, messages_media, stories_media, bundles_media);
+
+    match posts {
+        Ok(mut posts) => {
+            println!(
+                "\tFound {} items from posts for {}.",
+                posts.len(),
+                &sub.name,
+            );
+            all_media.append(&mut posts);
+        }
+        Err(e) => {
+            println!(
+                "\tError getting posts for {}({}): {}",
+                &sub.name, &sub.id, e
+            )
+        }
+    };
+    match messages {
+        Ok(mut messages) => {
+            println!(
+                "\tFound {} items from messages for {}.",
+                messages.len(),
+                &sub.name
+            );
+            all_media.append(&mut messages);
+        }
+        Err(e) => {
+            println!(
+                "\tError getting messages for {}({}). {:?}",
+                &sub.name, &sub.id, e
+            )
+        }
+    };
+    match stories {
+        Ok(mut stories) => {
+            println!(
+                "\tFound {} items from stories for {}.",
+                stories.len(),
+                &sub.name,
+            );
+            all_media.append(&mut stories);
+        }
+        Err(e) => {
+            println!(
+                "\tError getting stories for {}({}). {}",
+                &sub.name, &sub.id, e
+            )
+        }
+    };
+    match bundles {
+        Ok(mut bundles) => {
+            println!(
+                "\tFound {} items from bundles for {}.",
+                bundles.len(),
+                &sub.name
+            );
+            all_media.append(&mut bundles);
+        }
+        Err(e) => {
+            println!(
+                "\tError getting bundles for {}({}). {:?}",
+                &sub.name, &sub.id, e
+            )
+        }
+    };
+    Ok(all_media)
 }
 
 #[derive(Debug, Default, Tabled)]
@@ -51,13 +130,13 @@ pub struct Subscription {
     #[header("Tier")]
     pub plan: String,
     #[header(hidden = true)]
-    pub started: DateTime,
+    pub started: Option<DateTime>,
     #[header(hidden = true)]
-    pub renewal_date: DateTime,
+    pub renewal_date: Option<DateTime>,
     #[header(hidden = true)]
     pub rewewal_price: SubscriptionCost,
     #[header(hidden = true)]
-    pub ends_at: DateTime,
+    pub ends_at: Option<DateTime>,
     #[header("Videos")]
     pub video_count: i32,
     #[header("Images")]
@@ -66,7 +145,24 @@ pub struct Subscription {
     pub bundle_count: i32,
 }
 
-#[derive(Debug, Default)]
+impl Clone for Subscription {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            plan: self.plan.clone(),
+            started: None,
+            renewal_date: None,
+            rewewal_price: self.rewewal_price.clone(),
+            ends_at: None,
+            video_count: self.video_count,
+            image_count: self.image_count,
+            bundle_count: self.bundle_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct SubscriptionName {
     pub username: String,
     pub display_name: Option<String>,
@@ -84,7 +180,7 @@ impl Display for SubscriptionName {
 
 #[derive(Debug, Default, Tabled)]
 pub struct Media {
-    pub filename: String,
+    pub file_name: String,
     pub paid: bool,
     pub mime_type: String,
     #[header(hidden = true)]
@@ -112,7 +208,7 @@ impl std::fmt::Display for DateTime {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SubscriptionCost(pub Option<i64>);
 
 impl std::fmt::Display for SubscriptionCost {

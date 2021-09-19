@@ -4,9 +4,9 @@ use gatherer_core::{
     gatherers::{Gatherer, GathererErrors, Media, Subscription},
     AsyncResult,
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
-use crate::Fansly;
+use crate::{structs::MessageGroup, Fansly};
 
 #[async_trait::async_trait]
 impl Gatherer for Fansly {
@@ -85,8 +85,89 @@ impl Gatherer for Fansly {
             .collect())
     }
 
-    async fn gather_media_from_messages(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
-        Ok(Vec::new())
+    async fn gather_media_from_messages(&self, sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
+        let groups = self.get_messages_groups().await;
+        match groups {
+            Ok(groups) => {
+                // TODO: might be a better way to do this without grabbing all of them first
+                debug!("Found {} total message threads from fansly", groups.len());
+                let subscription_threads: Vec<MessageGroup> = groups
+                    .into_iter()
+                    .filter(|group| {
+                        group
+                            .users
+                            .iter()
+                            .any(|g_user| sub.id[..] == g_user.user_id)
+                    })
+                    .collect();
+                let mut media_ids_from_messages = Vec::new();
+                for thread in subscription_threads {
+                    let messages = self.get_all_messages_from_group(&thread.id).await;
+                    match messages {
+                        Ok(thread_messages) => {
+                            debug!(
+                                "Found {} messages in thread {}",
+                                thread_messages.len(),
+                                thread.id
+                            );
+                            let mut thread_media_ids: Vec<String> = thread_messages
+                                .iter()
+                                .flat_map(|m| {
+                                    m.attachments
+                                        .iter()
+                                        .map(|a| a.content_id.to_string())
+                                        .collect::<Vec<_>>()
+                                })
+                                .collect();
+                            info!(
+                                "Found {} media items from messages for {}",
+                                thread_media_ids.len(),
+                                sub.name
+                            );
+                            media_ids_from_messages.append(&mut thread_media_ids);
+                        }
+                        Err(group_message_err) => {
+                            return Err(format!(
+                                "Failed to get messages for {}({}). {:#}",
+                                sub.name, thread.id, group_message_err
+                            )
+                            .into())
+                        }
+                    }
+                }
+
+                let media_items = self.get_media_by_ids(&media_ids_from_messages).await;
+                match media_items {
+                    Ok(media) => {
+                        debug!(
+                            "Get data on {} media items from messages for user {}",
+                            media.len(),
+                            sub.name
+                        );
+                        // let media: Vec<Media> = ;
+                        Ok(media
+                            .into_iter()
+                            .filter_map(|fansly_media| match fansly_media.try_into() {
+                                Ok(link) => Some(link),
+                                Err(e) => None,
+                            })
+                            .collect())
+                    }
+                    Err(media_err) => Err(format!(
+                        "Failed to get media details for {} items for user {}. {:?}",
+                        media_ids_from_messages.len(),
+                        sub.name,
+                        media_err,
+                    )
+                    .into()),
+                }
+
+                // Ok(messages_media)
+            }
+            Err(group_err) => {
+                Err(format!("Failed to get message groups from Fansly. {:?}", group_err).into())
+            }
+        }
     }
 
     async fn gather_media_from_stories(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
@@ -100,9 +181,9 @@ impl Gatherer for Fansly {
         let account = account.response.get(0).unwrap();
 
         if let Some(avatar) = &account.avatar {
-            info!("Adding avatar for {}", sub.name);
+            debug!("Adding avatar for {}", sub.name);
             media.push(Media {
-                filename: avatar.filename.to_string(),
+                file_name: avatar.filename.to_string(),
                 mime_type: avatar.mimetype.to_string(),
                 url: avatar
                     .locations
@@ -114,9 +195,9 @@ impl Gatherer for Fansly {
         };
 
         if let Some(banner) = &account.banner {
-            info!("Adding banner for {}", sub.name);
+            debug!("Adding banner for {}", sub.name);
             media.push(Media {
-                filename: banner.filename.to_string(),
+                file_name: banner.filename.to_string(),
                 mime_type: banner.mimetype.to_string(),
                 url: banner
                     .locations

@@ -15,16 +15,16 @@ pub struct Post {
     #[serde(rename = "expiresAt")]
     pub expires_at: Option<i64>,
     pub attachments: Vec<Attachment>,
-    #[serde(rename = "likeCount", default)]
-    pub like_count: i64,
+    #[serde(rename = "likeCount")]
+    pub like_count: Option<i64>,
     #[serde(rename = "mediaLikeCount")]
-    pub media_like_count: i64,
+    pub media_like_count: Option<i64>,
     #[serde(rename = "totalTipAmount")]
-    pub total_tip_amount: i64,
+    pub total_tip_amount: Option<i64>,
     #[serde(rename = "attachmentTipAmount")]
-    pub attachment_tip_amount: i64,
-    #[serde(rename = "accountMentions")]
-    pub account_mentions: Vec<Mention>,
+    pub attachment_tip_amount: Option<i64>,
+    // #[serde(rename = "accountMentions")]
+    // pub account_mentions: Vec<Mention>,
     #[serde(rename = "replyCount")]
     pub reply_count: Option<i64>,
     pub liked: Option<bool>,
@@ -85,8 +85,6 @@ pub struct Avatar {
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     pub variants: Vec<Variant>,
-    #[serde(rename = "variantHash")]
-    pub variant_hash: VariantHash,
     pub locations: Vec<Location>,
 }
 
@@ -96,9 +94,6 @@ pub struct Location {
     pub location_id: String,
     pub location: String,
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct VariantHash {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Variant {
@@ -308,7 +303,7 @@ pub struct Mention {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Attachment {
-    pub pos: String,
+    // pub pos: String,
     #[serde(rename = "contentType")]
     pub content_type: i64,
     #[serde(rename = "contentId")]

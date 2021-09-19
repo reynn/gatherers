@@ -1,7 +1,7 @@
-use std::convert::TryFrom;
+use std::{convert::TryFrom, path::Path};
 
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Media {
@@ -39,8 +39,16 @@ impl TryFrom<Media> for gatherer_core::gatherers::Media {
             if details.locations.is_empty() {
                 return Err(format!("Content not available: {:?}", details));
             }
+            let original_file_path = Path::new(&details.filename);
+            debug!("The original upload file name was {:?}", original_file_path);
+            let mut file_name = media.id;
+            file_name += &original_file_path
+                .extension()
+                .map(|ext| format!(".{}", &ext.to_str().unwrap_or_default()))
+                .unwrap_or_default();
+            debug!("Media ID filename is {}", file_name);
             Ok(Self {
-                filename: details.filename.to_string(),
+                file_name,
                 url: details.locations[0].location.to_string(),
                 mime_type: details.mimetype,
                 paid: media.purchased,
