@@ -1,11 +1,20 @@
 mod errors;
 
 use crate::{gatherers::Media, AsyncResult};
+use crossbeam_channel::*;
 // use async_channel::{bounded, Receiver, Sender};
 pub use errors::DownloaderErrors;
+use futures::{stream, StreamExt};
+use indicatif::{MultiProgress, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use std::{convert::TryInto, fmt::Display, fs::File, path::PathBuf};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use std::{
+    convert::TryInto,
+    fmt::Display,
+    fs::File,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+// use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::{debug, error, info};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -14,8 +23,11 @@ pub struct DownloaderConfig {
     pub worker_count: Option<usize>,
 }
 
+#[derive(Debug, Clone)]
 pub struct Downloader {
+    // The download Queue will send to a worker pool
     receiver: Receiver<Downloadable>,
+    // Download Queue
     pub sender: Sender<Downloadable>,
     successfully_processed: i16,
     failed_to_process: i16,
@@ -23,8 +35,8 @@ pub struct Downloader {
 
 impl Downloader {
     pub fn new(conf: &'_ DownloaderConfig) -> Self {
-        let worker_limit = conf.worker_count.unwrap_or(8);
-        let (sender, receiver) = channel(worker_limit);
+        // let worker_limit = conf.worker_count.unwrap_or(12);
+        let (sender, receiver) = unbounded();
         Self {
             receiver,
             sender,
@@ -34,53 +46,102 @@ impl Downloader {
     }
 
     pub async fn add_downloadables(
-        sender: Sender<Downloadable>,
+        &self,
+        // sender: Sender<Downloadable>,
         downloadables: Vec<Downloadable>,
     ) -> AsyncResult<()> {
-        info!("Adding {} items to the queue", downloadables.len());
+        // let sender.
+        info!(
+            "Adding {} items to Queue({})",
+            downloadables.len(),
+            self.receiver.len()
+        );
         // tokio::spawn(async move {
-        for downloadable in downloadables {
-            let downloadable = downloadable;
-            let file_name = downloadable.file_name.to_string();
-            match sender.send(downloadable).await {
-                Ok(_) => debug!("{} sent to be processed by the downloader", file_name),
-                Err(err) => error!("Failed to send ({}) to the downloader: {}", file_name, err),
-            }
-        }
-        // });
-        Ok(())
-    }
-
-    pub async fn process_downloads(self) -> AsyncResult<i16> {
-        // tokio::spawn(async move {
-        println!("Starting to process downloads");
-        let mut receiver = self.receiver;
-
-        while let Some(downloadable) = receiver.recv().await {
-            // println!("Sender still open? {}", self.sender.  );
-            match downloadable.save_item().await {
-                Ok(bytes_written) => {
-                    if bytes_written == 0 {
-                        println!("{} already existed", downloadable.file_name);
-                        // Ok(())
-                    } else {
-                        println!(
-                            "Successfully wrote {} bytes to {}",
-                            bytes_written, downloadable.file_name
-                        );
-                        // Ok(())
+        let sender = self.sender.clone();
+        futures::stream::iter(downloadables)
+            .for_each_concurrent(10, |queueable| {
+                let sender = sender.clone();
+                async move {
+                    let file_name = queueable.file_name.to_string();
+                    match sender.send(queueable) {
+                        Ok(_) => {
+                            debug!("{} sent to be processed by the downloader", file_name);
+                            // Ok(())
+                        }
+                        Err(err) => {
+                            error!("Failed to send ({}) to the downloader: {}", file_name, err)
+                        }
                     }
                 }
-                Err(save_err) => {
-                    error!("Failed to save item {:?}", save_err);
-                    // Err(format!("Failed to save item {:?}", save_err))
-                }
-            }
-        }
-        receiver.close();
-        // })
-        Ok(0)
+            })
+            .await;
+        Ok(())
+        // for downloadable in downloadables {
+        //     let downloadable = downloadable;
+        //     let file_name = downloadable.file_name.to_string();
+        //     match sender.send(downloadable) {
+        //         Ok(_) => debug!("{} sent to be processed by the downloader", file_name),
+        //         Err(err) => error!("Failed to send ({}) to the downloader: {}", file_name, err),
+        //     }
+        // }
+        // });
+        // Ok(())
     }
+
+    pub async fn process_downloads(self) -> AsyncResult<DownloaderStats> {
+        let mut downloader_stats = DownloaderStats::default();
+        let mut iterations = 1;
+        loop {
+            info!("Queue manager loop({}) length", iterations);
+            select! {
+                recv(self.receiver)-> downloadable => {
+                    downloader_stats.total+=1;
+                    match downloadable {
+                        Ok(downloadable) => {
+                            info!("Items still to process {}", self.receiver.len());
+                            match downloadable.save_item().await {
+                                Ok(bytes_written) => {
+                                    if bytes_written == 0 {
+                                        info!("{} already existed", downloadable.file_name);
+                                        downloader_stats.previously_saved += 1;
+                                    } else {
+                                        downloader_stats.success += 1;
+                                        info!(
+                                            "Successfully wrote {} bytes to {}",
+                                            bytes_written, downloadable.file_name
+                                        );
+                                    }
+                                }
+                                Err(save_err) => {
+                                    error!("Failed to save item {:?}", save_err);
+                                    downloader_stats.failed += 1;
+                                }
+                            }
+                        },
+                        Err(receiver_err) => {
+                            error!("Unable to handle more downloadables. {:?}", receiver_err);
+                        }
+                    }
+                },
+                default(Duration::from_secs(5)) => {
+                    error!("Queue empty for too long");
+                    break;
+                },
+            }
+
+            iterations += 1;
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Ok(downloader_stats)
+    }
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct DownloaderStats {
+    pub total: usize,
+    pub failed: usize,
+    pub success: usize,
+    pub previously_saved: usize,
 }
 
 /// base_path.join(additional_path).join(file_name)
@@ -102,7 +163,6 @@ impl Downloadable {
     async fn save_item(&self) -> AsyncResult<u64> {
         let file_path = &self.base_path.join(&self.file_name);
         if file_path.exists() {
-            info!("File {} already exists", self.file_name);
             return Ok(0);
         }
         if let Some(parent) = file_path.parent() {
@@ -112,7 +172,7 @@ impl Downloadable {
                 });
             }
         }
-        info!("Downloading item {} from {}", &self, &self.public_url);
+        info!("Downloading item {}", &self);
         let response = reqwest::get(&self.public_url).await;
         match response {
             Ok(resp) => {
@@ -148,6 +208,7 @@ impl Downloadable {
             }
         }
     }
+
     pub fn from_media_with_path(media: &'_ Media, path: PathBuf) -> Self {
         debug!(
             "Creating downloadable for {} in {:?}",

@@ -10,6 +10,7 @@ use chrono::prelude::*;
 pub use errors::GathererErrors;
 use tabled::Tabled;
 use tokio::join;
+use tracing::info;
 
 #[async_trait::async_trait]
 pub trait Gatherer: std::fmt::Debug + Sync + Send {
@@ -41,64 +42,57 @@ pub async fn run_gatherer_for_subscription(
 
     match posts {
         Ok(mut posts) => {
-            println!(
-                "\tFound {} items from posts for {}.",
-                posts.len(),
-                &sub.name,
-            );
+            info!("Found {} items from posts for {}.", posts.len(), &sub.name,);
             all_media.append(&mut posts);
         }
         Err(e) => {
-            println!(
-                "\tError getting posts for {}({}): {}",
-                &sub.name, &sub.id, e
-            )
+            info!("Error getting posts for {}({}): {}", &sub.name, &sub.id, e)
         }
     };
     match messages {
         Ok(mut messages) => {
-            println!(
-                "\tFound {} items from messages for {}.",
+            info!(
+                "Found {} items from messages for {}.",
                 messages.len(),
                 &sub.name
             );
             all_media.append(&mut messages);
         }
         Err(e) => {
-            println!(
-                "\tError getting messages for {}({}). {:?}",
+            info!(
+                "Error getting messages for {}({}). {:?}",
                 &sub.name, &sub.id, e
             )
         }
     };
     match stories {
         Ok(mut stories) => {
-            println!(
-                "\tFound {} items from stories for {}.",
+            info!(
+                "Found {} items from stories for {}.",
                 stories.len(),
                 &sub.name,
             );
             all_media.append(&mut stories);
         }
         Err(e) => {
-            println!(
-                "\tError getting stories for {}({}). {}",
+            info!(
+                "Error getting stories for {}({}). {}",
                 &sub.name, &sub.id, e
             )
         }
     };
     match bundles {
         Ok(mut bundles) => {
-            println!(
-                "\tFound {} items from bundles for {}.",
+            info!(
+                "Found {} items from bundles for {}.",
                 bundles.len(),
                 &sub.name
             );
             all_media.append(&mut bundles);
         }
         Err(e) => {
-            println!(
-                "\tError getting bundles for {}({}). {:?}",
+            info!(
+                "Error getting bundles for {}({}). {:?}",
                 &sub.name, &sub.id, e
             )
         }

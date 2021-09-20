@@ -14,7 +14,7 @@ pub struct Media {
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     #[serde(rename = "deletedAt")]
-    pub deleted_at: Option<String>,
+    pub deleted_at: Option<i64>,
     #[serde(default)]
     pub deleted: bool,
     #[serde(rename = "media")]
@@ -40,13 +40,13 @@ impl TryFrom<Media> for gatherer_core::gatherers::Media {
                 return Err(format!("Content not available: {:?}", details));
             }
             let original_file_path = Path::new(&details.filename);
-            debug!("The original upload file name was {:?}", original_file_path);
+            // debug!("The original upload file name was {:?}", original_file_path);
             let mut file_name = media.id;
             file_name += &original_file_path
                 .extension()
                 .map(|ext| format!(".{}", &ext.to_str().unwrap_or_default()))
                 .unwrap_or_default();
-            debug!("Media ID filename is {}", file_name);
+            // debug!("Media ID filename is {}", file_name);
             Ok(Self {
                 file_name,
                 url: details.locations[0].location.to_string(),
@@ -69,8 +69,8 @@ pub struct MediaDetails {
     pub account_id: String,
     pub mimetype: String,
     pub filename: String,
-    pub width: i64,
-    pub height: i64,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
     pub metadata: String,
     #[serde(rename = "updatedAt")]
     pub updated_at: Option<i64>,

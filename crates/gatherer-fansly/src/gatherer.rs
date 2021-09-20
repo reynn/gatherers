@@ -25,10 +25,12 @@ impl Gatherer for Fansly {
                     .posts
                     .iter()
                     .flat_map(|p| {
-                        p.attachments
-                            .iter()
-                            .map(|a| a.content_id.to_string())
-                            .collect::<Vec<_>>()
+                        p.iter().flat_map(|post| {
+                            post.attachments
+                                .iter()
+                                .map(|a| a.content_id.to_string())
+                                .collect::<Vec<_>>()
+                        })
                     })
                     .collect::<Vec<String>>();
                 media_ids

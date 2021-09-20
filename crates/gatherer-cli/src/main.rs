@@ -89,7 +89,6 @@ async fn run() -> Result<()> {
     // Initialize our downloader
     let downloader = Downloader::new(&config.downloaders);
 
-    let downloader_channel = downloader.sender.clone();
     let downloads_directory = if let Some(cli_download_dir) = &cli.download_to {
         cli_download_dir.to_owned()
     } else if let Some(config_download_dir) = &config.downloaders.storage_dir {
@@ -106,14 +105,15 @@ async fn run() -> Result<()> {
             .clone()
             .join(gatherer_name.to_lowercase());
         // Get a list of subscriptions
-        let downloader = downloader_channel.clone();
-        // tokio::spawn(async move {
+        let downloader = downloader.clone();
+        // Start our gatherings, inner logic should probably be moved to a different func
         match gatherer.gather_subscriptions().await {
             Ok(subs) => {
                 if subs.is_empty() {
-                    return Err(format!("No subscriptions for {}", gatherer_name).into());
+                    error!("No subscriptions for {}", gatherer_name);
                 };
-                // let subs = subs.into_iter().take(5).collect::<Vec<_>>();
+                let subs = subs.into_iter().take(5).collect::<Vec<_>>();
+                let subs_config = config.clone();
                 println!(
                     "Found {} subs for {}\n{}",
                     subs.len(),
@@ -128,44 +128,44 @@ async fn run() -> Result<()> {
                         .join(",")
                 );
                 for sub in subs {
-                    let subscription_downloads_directory =
-                        gatherer_downloads_directory.join(&sub.name.username.to_lowercase());
                     println!(
                         "{} is getting data for subscriber: {}",
                         gatherer_name, sub.name
                     );
+                    let subscription_downloads_directory =
+                        gatherer_downloads_directory.join(&sub.name.username.to_lowercase());
                     let sub_gatherer = gatherer.clone();
+                    let subs_config = subs_config.clone();
                     let downloader = downloader.clone();
                     tokio::spawn(async move {
                         let gatherer_name = sub_gatherer.name();
                         match gatherers::run_gatherer_for_subscription(sub_gatherer, &sub).await {
                             Ok(medias) => {
-                                let response = Downloader::add_downloadables(
-                                    downloader,
-                                    medias
-                                        .into_iter()
-                                        .take(10)
-                                        .map(|media| {
-                                            let downloadable_path =
-                                                subscription_downloads_directory
-                                                    .clone()
-                                                    .join(if media.paid { "paid" } else { "free" });
-                                            Downloadable::from_media_with_path(
-                                                &media,
-                                                downloadable_path,
-                                            )
-                                        })
-                                        .collect(),
-                                )
-                                .await;
-                                match response {
-                                    Ok(_) => {
-                                        info!("Successfully sent post content items to the download queue");
+                                let downloadables = medias
+                                    .into_iter()
+                                    // .take(50)
+                                    .map(|media| {
+                                        let downloadable_path = subscription_downloads_directory
+                                            .clone()
+                                            .join(if media.paid { "paid" } else { "free" });
+                                        Downloadable::from_media_with_path(
+                                            &media,
+                                            downloadable_path,
+                                        )
+                                    })
+                                    .collect();
+                                tokio::spawn(async move {
+                                    let response =
+                                        downloader.add_downloadables(downloadables).await;
+                                    match response {
+                                        Ok(_) => {
+                                            debug!("Successfully sent post content items to the download queue");
+                                        }
+                                        Err(err) => {
+                                            error!("Failed to send items to the queue: {}", err);
+                                        }
                                     }
-                                    Err(err) => {
-                                        error!("Failed to send items to the queue: {}", err);
-                                    }
-                                };
+                                });
                             }
                             Err(gatherer_err) => error!(
                                 "The {} gatherer was unable to get subscriptions. {:?}",
@@ -174,21 +174,16 @@ async fn run() -> Result<()> {
                         }
                     });
                 }
-                // Ok(())
             }
             Err(subs_err) => {
-                eprintln!("No subscribers found for {}. ({})", gatherer_name, subs_err);
-                // Err(format!("Subscription error: {:?}", subs_err))
+                error!("Subscription error: {:?}", subs_err)
             }
         }
-        // });
     }
 
-    drop(downloader_channel);
-    // tokio::spawn(async move {
     match downloader.process_downloads().await {
-        Ok(count) => {
-            println!("Successfully downloaded {} files", count);
+        Ok(stats) => {
+            println!("Download results: {:?}", stats);
             Ok(())
         }
         Err(download_err) => {
@@ -196,8 +191,6 @@ async fn run() -> Result<()> {
             Err(download_err)
         }
     }
-    // });
-    // Ok(())
 }
 
 #[cfg(feature = "fansly")]

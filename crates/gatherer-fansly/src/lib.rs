@@ -16,7 +16,7 @@ use gatherer_core::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 const FANLSY_POST_LIMIT_COUNT: usize = 10;
 const FANSLY_API_STATUS_URL: &str = "https://apiv2.fansly.com/api/v1/status";
@@ -80,7 +80,7 @@ impl Fansly {
     pub async fn get_media_by_ids(&self, media_ids: &[String]) -> AsyncResult<Vec<structs::Media>> {
         let mut returned_media = Vec::new();
         if media_ids.is_empty() {
-            return Ok(Vec::new())
+            return Ok(Vec::new());
         }
         info!("Attempting to get {} media files", media_ids.len());
         for chunks_ids in media_ids.chunks(100) {
@@ -91,7 +91,7 @@ impl Fansly {
                 .await;
             match media {
                 Ok(mut response) => {
-                    debug!("Media Response {:#?}\n", response.response);
+                    trace!("Media Response {:#?}\n", response.response);
                     returned_media.append(&mut response.response);
                     // Some(response.response)
                 }
@@ -144,16 +144,16 @@ impl Fansly {
                 .await;
             match response {
                 Ok(post_response) => {
-                    let inner_posts = &post_response.response.posts;
-                    if inner_posts.len() < FANLSY_POST_LIMIT_COUNT {
-                        more_pages = false
+                    if let Some(user_posts) = &post_response.response.posts {
+                        if user_posts.len() < FANLSY_POST_LIMIT_COUNT {
+                            more_pages = false
+                        }
+                        user_posts.iter().for_each(|post| {
+                            before_post_id = post.id.to_string();
+                        });
+                        posts.push(post_response.response);
+                        debug!("Got page {} of users posts", offset + 1);
                     }
-                    inner_posts.iter().for_each(|post| {
-                        before_post_id = post.id.to_string();
-                        // posts.push(post)
-                    });
-                    posts.push(post_response.response);
-                    debug!("Got page {} of users posts", offset + 1);
                 }
                 Err(err) => return Err(err),
             }

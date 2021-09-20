@@ -41,7 +41,7 @@ pub mod inner {
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Posts {
-        pub posts: Vec<crate::structs::Post>,
+        pub posts: Option<Vec<crate::structs::Post>>,
         // #[serde(rename = "aggregatedPosts")]
         // pub aggregated_posts: Vec<String>,
         #[serde(rename = "accountMediaBundles")]
@@ -52,7 +52,7 @@ pub mod inner {
         pub tips: Vec<String>,
         // #[serde(rename = "tipGoals")]
         // pub tip_goals: Option<Vec<TipGoals>>,
-        pub stories: Option<Vec<String>>,
+        pub stories: Option<Vec<crate::structs::Story>>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]

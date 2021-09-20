@@ -117,7 +117,7 @@ impl ApiClient {
                     }))
                 }
             }
-            Err(exec_err) => todo!(),
+            Err(exec_err) => Err(Box::new(exec_err)),
         }
     }
 
