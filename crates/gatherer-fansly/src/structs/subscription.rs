@@ -10,9 +10,9 @@ pub struct Subscription {
     #[serde(rename = "subscriptionTierId")]
     pub subscription_tier_id: String,
     #[serde(rename = "subscriptionTierName")]
-    pub subscription_tier_name: String,
+    pub subscription_tier_name: Option<String>,
     #[serde(rename = "subscriptionTierColor")]
-    pub subscription_tier_color: String,
+    pub subscription_tier_color: Option<String>,
     #[serde(rename = "planId")]
     pub plan_id: String,
     #[serde(rename = "promoId")]

@@ -1,12 +1,10 @@
-use std::{convert::TryInto, time::Duration};
-
+use crate::{structs::MessageGroup, Fansly};
 use gatherer_core::{
     gatherers::{Gatherer, GathererErrors, Media, Subscription},
     AsyncResult,
 };
-use tracing::{debug, error, info};
-
-use crate::{structs::MessageGroup, Fansly};
+use std::{convert::TryInto, time::Duration};
+use tracing::{debug, error};
 
 #[async_trait::async_trait]
 impl Gatherer for Fansly {
@@ -15,9 +13,10 @@ impl Gatherer for Fansly {
     }
 
     async fn gather_media_from_posts(&self, sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
-        info!("Getting posts for user: {}", sub.id);
+        debug!("Getting posts for user: {}", sub.id);
 
         let posts = self.get_posts_by_user_id(&sub.id).await?;
+        debug!("{:?}", posts);
         let mut media_ids: Vec<String> = posts
             .iter()
             .flat_map(|p| {
@@ -37,17 +36,20 @@ impl Gatherer for Fansly {
             })
             .collect();
 
-        info!("Collecting media bundles");
+        debug!("Collecting media bundles");
         let bundle_ids: Vec<String> = posts
             .iter()
             .flat_map(|post| {
-                post.account_media_bundles
-                    .iter()
-                    .map(|bundle| bundle.id.to_string())
-                    .collect::<Vec<_>>()
+                if let Some(bundles) = &post.account_media_bundles {
+                    bundles
+                        .iter()
+                        .map(|bundle| bundle.id.to_string())
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                }
             })
             .collect();
-        debug!("Bundle ids: {:?}", &bundle_ids);
         let bundles = self.get_media_bundles_by_ids(&bundle_ids).await?;
         let mut bundle_media_ids: Vec<String> = bundles
             .into_iter()
@@ -58,22 +60,29 @@ impl Gatherer for Fansly {
         let mut account_media_ids: Vec<String> = posts
             .iter()
             .flat_map(|post| {
-                post.account_media
-                    .iter()
-                    .map(|a_media| a_media.id.to_string())
-                    .collect::<Vec<_>>()
+                if let Some(account_medias) = &post.account_media {
+                    account_medias
+                        .iter()
+                        .map(|a_media| a_media.id.to_string())
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                }
             })
             .collect();
         media_ids.append(&mut account_media_ids);
 
         // sort the ids so they are consecutive
+        debug!("");
         media_ids.sort();
         // dedup the list in just in case
         media_ids.dedup();
+        debug!("");
         // Get all discovered media file information
         let all_media = self.get_media_by_ids(&media_ids).await?;
-        info!(
-            "Downloaded info on {} total items for {}",
+        debug!(
+            "{}: Downloaded info on {} total items for {}",
+            self.name(),
             all_media.len(),
             sub.name
         );
@@ -121,7 +130,7 @@ impl Gatherer for Fansly {
                                         .collect::<Vec<_>>()
                                 })
                                 .collect();
-                            info!(
+                            debug!(
                                 "Found {} media items from messages for {}",
                                 thread_media_ids.len(),
                                 sub.name

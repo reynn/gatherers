@@ -28,7 +28,7 @@ pub enum GathererErrors {
     InvalidCredentials { name: String, msg: String },
     #[error("API Error: Status Code {status}")]
     HttpError {
-        status: reqwest::StatusCode,
+        status: surf::StatusCode,
         response_body: Option<String>,
     },
 
