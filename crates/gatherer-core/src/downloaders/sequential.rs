@@ -44,7 +44,7 @@ impl Downloader for SequentialDownloader {
                 Ok(_) => return Ok(()),
                 Err(try_err) => match try_err {
                     async_channel::TrySendError::Full(e) => {
-                        std::thread::sleep(Duration::from_millis(20));
+                        async_io::Timer::after(Duration::from_millis(20));
                         item = e;
                     }
                     async_channel::TrySendError::Closed(_) => {
@@ -72,9 +72,6 @@ impl Downloader for SequentialDownloader {
             )
             .into()),
         }
-    }
-    async fn get_sender(&self) -> AsyncResult<Sender<Downloadable>> {
-        Ok(self.sender.clone())
     }
 
     async fn process_all_items(&self) -> AsyncResult<DownloaderStats> {

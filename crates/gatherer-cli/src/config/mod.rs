@@ -19,7 +19,7 @@ pub struct Config {
     pub download_dir: String,
     pub api_config: ApiClientConfig,
     pub fansly: FanslyConfig,
-    pub only_fans: OnlyFansConfig,
+    pub onlyfans: OnlyFansConfig,
 }
 
 impl Config {
@@ -71,7 +71,7 @@ impl Default for Config {
             api_config: ApiClientConfig::default(),
             // downloaders: DownloaderConfig::default(),
             fansly: FanslyConfig::default(),
-            only_fans: OnlyFansConfig::default(),
+            onlyfans: OnlyFansConfig::default(),
             download_dir: String::from("/tmp"),
         }
     }

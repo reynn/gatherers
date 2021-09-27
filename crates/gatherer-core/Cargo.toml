@@ -8,6 +8,7 @@ version = "0.1.0"
 [dependencies]
 async-channel = "1.6"
 async-fs      = "1.5"
+async-io      = "1.6"
 async-task    = "4.0"
 async-trait   = "0.1"
 chrono        = "0.4"

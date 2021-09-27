@@ -130,7 +130,7 @@ impl Fansly {
         let mut posts: Vec<responses::inner::Posts> = Vec::new();
         let mut more_pages = true;
         let mut offset: usize = 0;
-        let mut before_post_id = String::new();
+        let mut before_post_id = String::from("0");
 
         while more_pages {
             let posts_url = format!(
@@ -144,8 +144,16 @@ impl Fansly {
                 .await;
             match response {
                 Ok(post_response) => {
+                    if post_response.response.account_media.is_none()
+                        && post_response.response.account_media_bundles.is_none()
+                        && post_response.response.aggregated_posts.is_none()
+                        && post_response.response.posts.is_none()
+                        && post_response.response.stories.is_none()
+                    {
+                        break
+                    }
                     if let Some(user_posts) = &post_response.response.posts {
-                        if user_posts.len() < FANLSY_POST_LIMIT_COUNT {
+                        if user_posts.len() < FANLSY_POST_LIMIT_COUNT && user_posts.is_empty() {
                             more_pages = false
                         }
                         user_posts.iter().for_each(|post| {

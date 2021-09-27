@@ -1,4 +1,4 @@
-use crate::{gatherers::Media, AsyncResult};
+use crate::{downloaders::DownloaderErrors, gatherers::Media, AsyncResult};
 use async_fs::File;
 use futures_lite::{
     io::{copy, AsyncWriteExt, BufReader},
@@ -45,80 +45,88 @@ impl Downloadable {
         let min_size_to_chunk = min_size_to_chunk.unwrap_or(DEFAULT_MIN_SIZE_TO_CHUNK);
         let chunk_sizes = chunk_size.unwrap_or(DEFAULT_BUFFER_SIZE);
         let file_path = &self.get_file_path();
-        if file_path.exists() {
-            return Ok(0);
-        }
-        if let Some(parent) = file_path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(&parent).unwrap_or_else(|err| {
-                    error!("Unable to create base path {:?}. \n{:?}", parent, err)
-                });
-            }
-        }
+
+        let mut output_file = if file_path.exists() {
+            debug!("opening file: {:?}", file_path);
+            async_fs::File::open(file_path).await
+        } else {
+            debug!("creating file: {:?}", file_path);
+            async_fs::create_dir_all(file_path.parent().unwrap()).await?;
+            async_fs::File::create(file_path).await
+        }?;
+        output_file.sync_all().await?;
 
         let resp = surf::head(&self.public_url).send().await?;
-
-        let content_length: u64 = if let Some(cl_header) = resp.header("content-length") {
-            u64::from_str(cl_header.as_str()).unwrap_or(0)
+        let content_length: u64 = if let Some(cl_header) = resp.header(CONTENT_LENGTH) {
+            cl_header.as_str().parse().unwrap()
         } else {
             0
         };
 
-        let mut output_file = async_fs::File::create(file_path).await?;
+        // let mut output_file = async_fs::File::create(file_path).await?;
 
-        debug!("Downloading item {} length {}", &self, content_length);
-        if content_length > DEFAULT_MIN_SIZE_TO_CHUNK {
-            info!(
-                "Downloading {} in {} byte chunks sized {} < {}",
-                self.file_name, DEFAULT_BUFFER_SIZE, content_length, DEFAULT_MIN_SIZE_TO_CHUNK
-            );
-            let mut total_written_bytes: u64 = 0;
-            // Iterate through the content length, get chunks of data to write instead of a full buffer in memory
-            for range in PartialRangeIter::new(0, content_length - 1, DEFAULT_BUFFER_SIZE)? {
-                debug!("Getting chunk range {:?} of {}", range, content_length);
-                match surf::get(&self.public_url)
-                    .header(CONTENT_RANGE, range.as_str())
-                    .await
-                {
-                    Ok(mut data_chunk) => {
-                        match futures::io::copy(&mut data_chunk, &mut output_file).await {
-                            Ok(bytes_written) => total_written_bytes += bytes_written,
-                            Err(err) => {
-                                error!("Failed to write {:?} bytes to {:?}", range, file_path);
-                                return Err(Box::new(err));
-                            }
-                        }
-                    }
-                    Err(chunk_err) => error!(
-                        "Failed to get chunk of {} sized {}. {:?}",
-                        &self.file_name, DEFAULT_BUFFER_SIZE, chunk_err
-                    ),
-                };
+        debug!(
+            "{:?} current size {}, expected length {}",
+            file_path,
+            output_file.metadata().await?.len(),
+            content_length
+        );
+        if output_file.metadata().await?.len().eq(&content_length) {
+            return Ok(u64::MIN);
+        };
+
+        // if content_length > DEFAULT_MIN_SIZE_TO_CHUNK {
+        //     info!(
+        //         "Downloading {} in {} byte chunks sized {} < {}",
+        //         self.file_name, DEFAULT_BUFFER_SIZE, content_length, DEFAULT_MIN_SIZE_TO_CHUNK
+        //     );
+        //     let mut total_written_bytes: u64 = 0;
+        //     // Iterate through the content length, get chunks of data to write instead of a full buffer in memory
+        //     for range in PartialRangeIter::new(0, content_length - 1, DEFAULT_BUFFER_SIZE)? {
+        //         debug!("Getting chunk range {:?} of {}", range, content_length);
+        //         match surf::get(&self.public_url)
+        //             .header(CONTENT_RANGE, range.as_str())
+        //             .await
+        //         {
+        //             Ok(mut data_chunk) => {
+        //                 match futures::io::copy(&mut data_chunk, &mut output_file).await {
+        //                     Ok(bytes_written) => total_written_bytes += bytes_written,
+        //                     Err(err) => {
+        //                         error!("Failed to write {:?} bytes to {:?}", range, file_path);
+        //                         return Err(Box::new(err));
+        //                     }
+        //                 }
+        //             }
+        //             Err(chunk_err) => error!(
+        //                 "Failed to get chunk of {} sized {}. {:?}",
+        //                 &self.file_name, DEFAULT_BUFFER_SIZE, chunk_err
+        //             ),
+        //         };
+        //     }
+        //     Ok(total_written_bytes)
+        // } else {
+        debug!(
+            "Downloading {} all at once sized {} < {}",
+            self.file_name, content_length, DEFAULT_MIN_SIZE_TO_CHUNK
+        );
+
+        match surf::get(&self.public_url).await {
+            Ok(mut resp) => {
+                debug!("Download response for {} {:?}", &self.public_url, resp);
+                match futures::io::copy(&mut resp, &mut output_file).await {
+                    Ok(bytes_written) => Ok(bytes_written),
+                    Err(copy_err) => Err(format!(
+                        "Failed to copy bytes to file {:?}. {:?}",
+                        file_path, copy_err
+                    )
+                    .into()),
+                }
             }
-
-            Ok(total_written_bytes)
-        } else {
-            debug!(
-                "Downloading {} all at once sized {} < {}",
-                self.file_name, content_length, DEFAULT_MIN_SIZE_TO_CHUNK
-            );
-            match surf::get(&self.public_url).await {
-                Ok(mut resp) => {
-                    debug!("Download response for {} {:?}", &self.public_url, resp);
-                    match futures::io::copy(&mut resp, &mut output_file).await {
-                        Ok(bytes_written) => Ok(bytes_written),
-                        Err(copy_err) => Err(format!(
-                            "Failed to copy bytes to file {:?}. {:?}",
-                            file_path, copy_err
-                        )
-                        .into()),
-                    }
-                }
-                Err(req_err) => {
-                    Err(format!("Request to {} failed. {:?}", &self.public_url, req_err).into())
-                }
+            Err(req_err) => {
+                Err(format!("Request to {} failed. {}", &self.public_url, req_err).into())
             }
         }
+        // }
     }
 
     pub fn get_file_path(&self) -> PathBuf {
@@ -169,7 +177,26 @@ impl Iterator for PartialRangeIter {
             let prev_start = self.start;
             self.start += std::cmp::min(self.buffer_size as u64, self.end - self.start + 1);
             let hs = format!("bytes={}-{}", prev_start, self.start - 1);
-            Some(HeaderValue::from_bytes(hs.into_bytes()).expect("Unable to create "))
+            let hs_bytes = hs.as_bytes().to_vec();
+            match HeaderValue::from_bytes(hs_bytes) {
+                Ok(hv) => {
+                    debug!("{{PartialRangeIter}}: sent a header `{:?}`", hv);
+                    Some(hv)
+                }
+                Err(err) => {
+                    error!(
+                        "{{PartialRangeIter}}: failed to create header from string bytes({}) [{:?}]. Error: {:?}",
+                        hs.len(),
+                        hs,
+                        err
+                    );
+                    None
+                }
+            }
+            // Some(
+            //     HeaderValue::from_bytes(hs_bytes)
+            //         .unwrap_or_else(|_| panic!("Unable to create header for {}", hs)),
+            // )
         }
     }
 }

@@ -30,37 +30,69 @@ pub trait Gatherer: std::fmt::Debug + Sync + Send {
         false
     }
 }
-async fn run_gatherer(
-    name: impl Into<String>,
-    gatherer: &'_ Arc<dyn Gatherer>,
+
+#[derive(Debug, Clone, Copy)]
+pub struct RunLimits {
+    pub media: usize,
+    pub subscriptions: usize,
+}
+
+pub struct GathererInfo {
+    base_path: PathBuf,
     gather_type: GatherType,
-    base_path: &'_ Path,
-    sub: &'_ Subscription,
-) -> AsyncResult<(PathBuf, Vec<Media>)> {
-    let name = name.into();
+    gatherer: Arc<dyn Gatherer>,
+    subscription: Subscription,
+    downloader: Sender<Downloadable>,
+    name: String,
+}
+
+async fn run_gatherer(info: GathererInfo) -> AsyncResult<()> {
+    let name = info.name;
+    let gather_type = info.gather_type;
+    let sub = info.subscription;
     info!(
-        "{}: Starting to gather {} for {}",
-        name, gather_type, sub.name
+        "{:>10}: Starting to gather {:8} for {:^20}",
+        name, gather_type, &sub.name.username
     );
     let all_media = match gather_type {
-        GatherType::Posts => gatherer.gather_media_from_posts(sub),
-        GatherType::Messages => gatherer.gather_media_from_messages(sub),
-        GatherType::Bundles => gatherer.gather_media_from_bundles(sub),
-        GatherType::Stories => gatherer.gather_media_from_stories(sub),
+        GatherType::Posts => info.gatherer.gather_media_from_posts(&sub),
+        GatherType::Messages => info.gatherer.gather_media_from_messages(&sub),
+        GatherType::Bundles => info.gatherer.gather_media_from_bundles(&sub),
+        GatherType::Stories => info.gatherer.gather_media_from_stories(&sub),
     }
     .await;
 
     match all_media {
-        Ok(media) => {
-            let sub_path = base_path.join(&sub.name.username.to_ascii_lowercase());
+        Ok(medias) => {
+            let sub_path = info.base_path.join(&sub.name.username.to_ascii_lowercase());
+
             info!(
-                "{}: Completed gathering {} for {}. Found {} items",
+                "{:>10}: Completed gathering {:8} for {:^20}. Found [{:^4}] items",
                 name,
                 gather_type,
-                sub.name,
-                media.len()
+                sub.name.username,
+                medias.len()
             );
-            Ok((sub_path, media))
+
+            for media in medias.iter() {
+                let downloadable_path =
+                    info.base_path
+                        .clone()
+                        .join(if media.paid { "paid" } else { "free" });
+                // let item = Downloadable::from_media_with_path(media, downloadable_path);
+                match info
+                    .downloader
+                    .try_send(Downloadable::from_media_with_path(media, downloadable_path))
+                {
+                    Ok(_) => {
+                        debug!("{:>12}: Sent item to download queue", name)
+                    }
+                    Err(send_err) => {
+                        error!("{:>12}: Failed to send to queue. {:?}", name, send_err)
+                    }
+                }
+            }
+            Ok(())
         }
         Err(gather_err) => Err(format!(
             "{}: Failed to gather {}. Error: {:?}",
@@ -72,66 +104,55 @@ async fn run_gatherer(
 
 pub async fn run_gatherer_for_all(
     gatherer: Arc<dyn Gatherer>,
-    downloader: Sender<Downloadable>,
     base_path: impl Into<PathBuf>,
+    download_tx: Sender<Downloadable>,
+    limits: RunLimits,
 ) -> AsyncResult<()> {
     let gatherer_name = gatherer.name();
     let sub_result = gatherer.gather_subscriptions().await;
+    let mut subs_tasks = Vec::new();
     match sub_result {
         Ok(subscriptions) => {
+            // subs_tasks.push(async move {
             println!(
                 "{}: Found {} subscriptions",
                 gatherer_name,
                 subscriptions.len()
             );
-            let base_path = base_path.into();
+            let base_path: PathBuf = base_path.into();
             let base_path = base_path.join(gatherer.name().to_ascii_lowercase());
-            // let gatherer = gatherer.clone();
-            for sub in subscriptions.iter().take(4) {
-                let mut sub_tasks = Vec::new();
-                for gather_type in GatherType::iter() {
-                    sub_tasks.push(run_gatherer(
-                        gatherer_name,
-                        &gatherer,
-                        gather_type,
-                        &base_path,
-                        sub,
-                    ));
-                }
+            let subscriptions = if limits.subscriptions == 0 {
+                subscriptions
+            } else {
+                debug!(
+                    "{:>10}: Limiting to only {} subscriptions",
+                    gatherer_name, limits.subscriptions
+                );
+                subscriptions
+                    .into_iter()
+                    .take(limits.subscriptions)
+                    .collect()
+            };
 
-                let results = futures::future::join_all(sub_tasks).await;
-                for result in results {
-                    match result {
-                        Ok((base_pah, medias)) => {
-                            for media in medias.iter().take(20) {
-                                let downloadable_path =
-                                    base_pah
-                                        .clone()
-                                        .join(if media.paid { "paid" } else { "free" });
-                                let item =
-                                    Downloadable::from_media_with_path(media, downloadable_path);
-                                match downloader.try_send(item) {
-                                    Ok(_) => {
-                                        debug!("{}: Sent item to download queue", gatherer_name)
-                                    }
-                                    Err(send_err) => {
-                                        error!(
-                                            "{}: Failed to send to queue. {:?}",
-                                            gatherer_name, send_err
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Err(gather_err) => {
-                            error!("{:?}", gather_err);
-                        }
-                    }
+            for sub in subscriptions.iter() {
+                for gather_type in GatherType::iter() {
+                    let info = GathererInfo {
+                        base_path: base_path.clone().join(&sub.name.username),
+                        gather_type,
+                        gatherer: gatherer.clone(),
+                        subscription: sub.clone(),
+                        downloader: download_tx.clone(),
+                        name: gatherer_name.into(),
+                    };
+                    subs_tasks.push(run_gatherer(info));
                 }
             }
         }
         Err(sub_err) => return Err(sub_err),
     }
+
+    // subs.tasks.
+    futures::future::join_all(subs_tasks).await;
     info!(
         "{}: Completed gathering everything for all subs",
         gatherer_name
@@ -229,7 +250,10 @@ pub struct Media {
 }
 
 #[derive(Debug, Default)]
-pub struct Story {}
+pub struct Story {
+    pub id: String,
+    pub content_text: Option<String>,
+}
 
 #[derive(Debug, Default)]
 pub struct DateTime(Option<chrono::DateTime<Utc>>);

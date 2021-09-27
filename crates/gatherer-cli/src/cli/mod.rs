@@ -13,9 +13,15 @@ pub struct Cli {
     #[structopt(long)]
     pub content_types: Option<ContentTypes>,
     #[structopt(short, long)]
-    pub download_to: Option<PathBuf>,
+    pub target_folder: Option<PathBuf>,
     #[structopt(long)]
     pub pretty: bool,
+    #[structopt(short = "C", long, default_value = "8")]
+    pub worker_count: usize,
+    #[structopt(short, long, default_value = "0")]
+    pub limit_subs: usize,
+    #[structopt(short = "L", long, default_value = "0")]
+    pub limit_media: usize,
 }
 
 #[derive(Debug, StructOpt)]

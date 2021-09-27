@@ -38,7 +38,6 @@ pub trait Downloader: Send + Sync {
     async fn process_single_item(&self, worker_num: usize) -> AsyncResult<u64>;
     // Loop through download queue until closed or empty
     async fn process_all_items(&self) -> AsyncResult<DownloaderStats>;
-    async fn get_sender(&self) -> AsyncResult<Sender<Downloadable>>;
 }
 
 // TODO: not entirely sure this does what is expected.
