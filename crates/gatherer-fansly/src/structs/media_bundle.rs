@@ -19,7 +19,6 @@ pub struct MediaBundle {
     pub account_media_ids: Vec<String>,
     #[serde(rename = "bundleContent")]
     pub bundle_content: Vec<BundleContent>,
-    pub permissions: Permissions,
     pub purchased: bool,
     pub whitelisted: bool,
     #[serde(rename = "accountPermissionFlags")]
@@ -32,34 +31,4 @@ pub struct BundleContent {
     #[serde(rename = "accountMediaId")]
     pub account_media_id: String,
     pub pos: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Permissions {
-    #[serde(rename = "permissionFlags")]
-    pub permission_flags: Vec<PermissionFlag>,
-    #[serde(rename = "accountPermissionFlags")]
-    pub account_permission_flags: AccountPermissionFlags,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AccountPermissionFlags {
-    pub flags: i64,
-    pub metadata: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PermissionFlag {
-    pub id: String,
-    #[serde(rename = "accountMediaId")]
-    pub account_media_id: String,
-    #[serde(rename = "type")]
-    pub permission_flag_type: i64,
-    pub flags: i64,
-    pub price: i64,
-    pub metadata: String,
-    #[serde(rename = "validAfter")]
-    pub valid_after: Option<i64>,
-    #[serde(rename = "validBefore")]
-    pub valid_before: Option<i64>,
 }

@@ -1,16 +1,22 @@
 mod errors;
+mod r#type;
 
-use std::{fmt::Display, path::PathBuf, sync::Arc};
-
+pub use self::{errors::GathererErrors, r#type::GatherType};
 use crate::{
-    downloaders::{Downloadable, DownloaderConfig},
+    downloaders::{Downloadable, Downloader},
     AsyncResult, Result,
 };
+use async_channel::Sender;
 use chrono::prelude::*;
-pub use errors::GathererErrors;
-use tabled::Tabled;
-use tokio::join;
-use tracing::info;
+use futures::Future;
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use strum::IntoEnumIterator;
+use tracing::{debug, error, info};
 
 #[async_trait::async_trait]
 pub trait Gatherer: std::fmt::Debug + Sync + Send {
@@ -25,118 +31,181 @@ pub trait Gatherer: std::fmt::Debug + Sync + Send {
     }
 }
 
-pub async fn run_gatherer_for_subscription(
-    gatherer: Arc<dyn Gatherer>,
-    sub: &'_ Subscription,
-) -> AsyncResult<Vec<Media>> {
-    let sub = sub.clone();
-    let posts_media = gatherer.gather_media_from_posts(&sub);
-    let messages_media = gatherer.gather_media_from_messages(&sub);
-    let stories_media = gatherer.gather_media_from_stories(&sub);
-    let bundles_media = gatherer.gather_media_from_bundles(&sub);
-
-    let mut all_media: Vec<Media> = Vec::new();
-
-    let (posts, messages, stories, bundles) =
-        join!(posts_media, messages_media, stories_media, bundles_media);
-
-    match posts {
-        Ok(mut posts) => {
-            info!("Found {} items from posts for {}.", posts.len(), &sub.name,);
-            all_media.append(&mut posts);
-        }
-        Err(e) => {
-            info!("Error getting posts for {}({}): {}", &sub.name, &sub.id, e)
-        }
-    };
-    match messages {
-        Ok(mut messages) => {
-            info!(
-                "Found {} items from messages for {}.",
-                messages.len(),
-                &sub.name
-            );
-            all_media.append(&mut messages);
-        }
-        Err(e) => {
-            info!(
-                "Error getting messages for {}({}). {:?}",
-                &sub.name, &sub.id, e
-            )
-        }
-    };
-    match stories {
-        Ok(mut stories) => {
-            info!(
-                "Found {} items from stories for {}.",
-                stories.len(),
-                &sub.name,
-            );
-            all_media.append(&mut stories);
-        }
-        Err(e) => {
-            info!(
-                "Error getting stories for {}({}). {}",
-                &sub.name, &sub.id, e
-            )
-        }
-    };
-    match bundles {
-        Ok(mut bundles) => {
-            info!(
-                "Found {} items from bundles for {}.",
-                bundles.len(),
-                &sub.name
-            );
-            all_media.append(&mut bundles);
-        }
-        Err(e) => {
-            info!(
-                "Error getting bundles for {}({}). {:?}",
-                &sub.name, &sub.id, e
-            )
-        }
-    };
-    Ok(all_media)
+#[derive(Debug, Clone, Copy)]
+pub struct RunLimits {
+    pub media: usize,
+    pub subscriptions: usize,
 }
 
-#[derive(Debug, Default, Tabled)]
+pub struct GathererInfo {
+    base_path: PathBuf,
+    gather_type: GatherType,
+    gatherer: Arc<dyn Gatherer>,
+    subscription: Subscription,
+    downloader: Sender<Downloadable>,
+    name: String,
+}
+
+async fn run_gatherer(info: GathererInfo) -> AsyncResult<()> {
+    let name = info.name;
+    let gather_type = info.gather_type;
+    let sub = info.subscription;
+    info!(
+        "{:>10}: Starting to gather {:8} for {:^20}",
+        name, gather_type, &sub.name.username
+    );
+    let all_media = match gather_type {
+        GatherType::Posts => info.gatherer.gather_media_from_posts(&sub),
+        GatherType::Messages => info.gatherer.gather_media_from_messages(&sub),
+        GatherType::Bundles => info.gatherer.gather_media_from_bundles(&sub),
+        GatherType::Stories => info.gatherer.gather_media_from_stories(&sub),
+    }
+    .await;
+
+    match all_media {
+        Ok(medias) => {
+            let sub_path = info.base_path.join(&sub.name.username.to_ascii_lowercase());
+
+            info!(
+                "{:>10}: Completed gathering {:8} for {:^20}. Found [{:^4}] items",
+                name,
+                gather_type,
+                sub.name.username,
+                medias.len()
+            );
+
+            for media in medias.iter() {
+                let downloadable_path =
+                    info.base_path
+                        .clone()
+                        .join(if media.paid { "paid" } else { "free" });
+                // let item = Downloadable::from_media_with_path(media, downloadable_path);
+                match info
+                    .downloader
+                    .try_send(Downloadable::from_media_with_path(media, downloadable_path))
+                {
+                    Ok(_) => {
+                        debug!("{:>12}: Sent item to download queue", name)
+                    }
+                    Err(send_err) => {
+                        error!("{:>12}: Failed to send to queue. {:?}", name, send_err)
+                    }
+                }
+            }
+            Ok(())
+        }
+        Err(gather_err) => Err(format!(
+            "{}: Failed to gather {}. Error: {:?}",
+            name, gather_type, gather_err
+        )
+        .into()),
+    }
+}
+
+pub async fn run_gatherer_for_all(
+    gatherer: Arc<dyn Gatherer>,
+    base_path: impl Into<PathBuf>,
+    download_tx: Sender<Downloadable>,
+    limits: RunLimits,
+) -> AsyncResult<()> {
+    let gatherer_name = gatherer.name();
+    let sub_result = gatherer.gather_subscriptions().await;
+    let mut subs_tasks = Vec::new();
+    match sub_result {
+        Ok(subscriptions) => {
+            // subs_tasks.push(async move {
+            println!(
+                "{}: Found {} subscriptions",
+                gatherer_name,
+                subscriptions.len()
+            );
+            let base_path: PathBuf = base_path.into();
+            let base_path = base_path.join(gatherer.name().to_ascii_lowercase());
+            let subscriptions = if limits.subscriptions == 0 {
+                subscriptions
+            } else {
+                debug!(
+                    "{:>10}: Limiting to only {} subscriptions",
+                    gatherer_name, limits.subscriptions
+                );
+                subscriptions
+                    .into_iter()
+                    .take(limits.subscriptions)
+                    .collect()
+            };
+
+            for sub in subscriptions.iter() {
+                for gather_type in GatherType::iter() {
+                    let info = GathererInfo {
+                        base_path: base_path.clone().join(&sub.name.username),
+                        gather_type,
+                        gatherer: gatherer.clone(),
+                        subscription: sub.clone(),
+                        downloader: download_tx.clone(),
+                        name: gatherer_name.into(),
+                    };
+                    subs_tasks.push(run_gatherer(info));
+                }
+            }
+        }
+        Err(sub_err) => return Err(sub_err),
+    }
+
+    // subs.tasks.
+    futures::future::join_all(subs_tasks).await;
+    info!(
+        "{}: Completed gathering everything for all subs",
+        gatherer_name
+    );
+    Ok(())
+}
+
+#[derive(Debug, Default)]
 pub struct Post {
-    #[header(hidden = true)]
     pub id: String,
     pub title: String,
     pub content: String,
-    #[header(hidden = true)]
     pub media: Vec<Media>,
     pub paid: bool,
 }
 
-#[derive(Debug, Default, Tabled)]
-pub struct Message {}
+impl Display for Post {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Post(id={}; title={:?})", self.id, self.title)
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Message {
+    pub from: SubscriptionName,
+    pub to: SubscriptionName,
+    pub message: String,
+    pub attached_media: Vec<Media>,
+}
 
 //  This may need to get abstracted out into a multiple types of subs
-#[derive(Debug, Default, Tabled)]
+#[derive(Debug, Default)]
 pub struct Subscription {
-    #[header(hidden = true)]
     pub id: String,
-    #[header("Name")]
     pub name: SubscriptionName,
-    #[header("Tier")]
     pub plan: String,
-    #[header(hidden = true)]
     pub started: Option<DateTime>,
-    #[header(hidden = true)]
     pub renewal_date: Option<DateTime>,
-    #[header(hidden = true)]
     pub rewewal_price: SubscriptionCost,
-    #[header(hidden = true)]
     pub ends_at: Option<DateTime>,
-    #[header("Videos")]
     pub video_count: i32,
-    #[header("Images")]
     pub image_count: i32,
-    #[header("Bundles")]
     pub bundle_count: i32,
+}
+
+impl Display for Subscription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Subscription(id={}; user_name={})",
+            self.id, self.name.username
+        )
+    }
 }
 
 impl Clone for Subscription {
@@ -172,17 +241,19 @@ impl Display for SubscriptionName {
     }
 }
 
-#[derive(Debug, Default, Tabled)]
+#[derive(Debug, Default)]
 pub struct Media {
     pub file_name: String,
     pub paid: bool,
     pub mime_type: String,
-    #[header(hidden = true)]
     pub url: String,
 }
 
-#[derive(Debug, Default, Tabled)]
-pub struct Story {}
+#[derive(Debug, Default)]
+pub struct Story {
+    pub id: String,
+    pub content_text: Option<String>,
+}
 
 #[derive(Debug, Default)]
 pub struct DateTime(Option<chrono::DateTime<Utc>>);

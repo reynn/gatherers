@@ -1,9 +1,7 @@
 mod errors;
 
 pub use errors::ConfigErrors;
-use gatherer_core::{
-    directories::Directories, downloaders::DownloaderConfig, http::ApiClientConfig,
-};
+use gatherer_core::{directories::Directories, http::ApiClientConfig};
 use gatherer_fansly::FanslyConfig;
 use gatherer_onlyfans::OnlyFansConfig;
 use serde::{Deserialize, Serialize};
@@ -18,10 +16,10 @@ pub type Result<T, E = errors::ConfigErrors> = std::result::Result<T, E>;
 pub struct Config {
     // #[serde(skip)]
     pub config_dir: String,
+    pub download_dir: String,
     pub api_config: ApiClientConfig,
-    pub downloaders: DownloaderConfig,
     pub fansly: FanslyConfig,
-    pub only_fans: OnlyFansConfig,
+    pub onlyfans: OnlyFansConfig,
 }
 
 impl Config {
@@ -71,9 +69,10 @@ impl Default for Config {
         Self {
             config_dir: String::from(config_directory.to_str().unwrap_or_default()),
             api_config: ApiClientConfig::default(),
-            downloaders: DownloaderConfig::default(),
+            // downloaders: DownloaderConfig::default(),
             fansly: FanslyConfig::default(),
-            only_fans: OnlyFansConfig::default(),
+            onlyfans: OnlyFansConfig::default(),
+            download_dir: String::from("/tmp"),
         }
     }
 }

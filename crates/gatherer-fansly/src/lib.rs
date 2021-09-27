@@ -82,7 +82,7 @@ impl Fansly {
         if media_ids.is_empty() {
             return Ok(Vec::new());
         }
-        info!("Attempting to get {} media files", media_ids.len());
+        debug!("Attempting to get {} media files", media_ids.len());
         for chunks_ids in media_ids.chunks(100) {
             let endpoint = format!("{}?ids={}", FANSLY_API_MEDIA_URL, chunks_ids.join(","));
             let media = self
@@ -91,7 +91,7 @@ impl Fansly {
                 .await;
             match media {
                 Ok(mut response) => {
-                    trace!("Media Response {:#?}\n", response.response);
+                    trace!("Media Response {:?}\n", response.response);
                     returned_media.append(&mut response.response);
                     // Some(response.response)
                 }
@@ -130,7 +130,7 @@ impl Fansly {
         let mut posts: Vec<responses::inner::Posts> = Vec::new();
         let mut more_pages = true;
         let mut offset: usize = 0;
-        let mut before_post_id = String::new();
+        let mut before_post_id = String::from("0");
 
         while more_pages {
             let posts_url = format!(
@@ -144,8 +144,16 @@ impl Fansly {
                 .await;
             match response {
                 Ok(post_response) => {
+                    if post_response.response.account_media.is_none()
+                        && post_response.response.account_media_bundles.is_none()
+                        && post_response.response.aggregated_posts.is_none()
+                        && post_response.response.posts.is_none()
+                        && post_response.response.stories.is_none()
+                    {
+                        break
+                    }
                     if let Some(user_posts) = &post_response.response.posts {
-                        if user_posts.len() < FANLSY_POST_LIMIT_COUNT {
+                        if user_posts.len() < FANLSY_POST_LIMIT_COUNT && user_posts.is_empty() {
                             more_pages = false
                         }
                         user_posts.iter().for_each(|post| {
@@ -202,7 +210,7 @@ impl Fansly {
                     }
                 } else {
                     error!("Response from Fansly failed, {:?}", resp);
-                    debug!("{:#?}", resp);
+                    debug!("{:?}", resp);
                     Err(Box::new(GathererErrors::NoSubscriptionsFound {
                         gatherer: self.name().to_string(),
                         data: format!("{:?}", resp.response),
@@ -210,7 +218,7 @@ impl Fansly {
                 }
             }
             Err(resp_err) => {
-                error!("Response from  {:#?}", resp_err);
+                error!("Response from  {:?}", resp_err);
                 Err(resp_err)
             }
         }
@@ -244,7 +252,7 @@ impl Fansly {
 
         match resp_res {
             Ok(resp) => {
-                debug!("Response for thread {}. {:#?}", group_id, resp.response);
+                debug!("Response for thread {}. {:?}", group_id, resp.response);
                 Ok(resp.response.messages)
             }
             Err(message_err) => Err(format!(
@@ -299,13 +307,18 @@ fn combine_subs_and_account_info(
                         image_count = stats.image_count;
                         bundle_count = stats.bundle_count;
                     };
+                    let sub_tier = if let Some(tier_name) = &sub.subscription_tier_name {
+                        tier_name
+                    } else {
+                        "Unknown"
+                    };
                     Some(Subscription {
                         id: info.id.to_string(),
                         name: SubscriptionName {
                             username: info.username.to_string(),
                             display_name: info.display_name.to_owned(),
                         },
-                        plan: sub.subscription_tier_name.to_string(),
+                        plan: String::from(sub_tier),
                         started: Some(Utc.timestamp_millis(sub.created_at).into()),
                         renewal_date: Some(Utc.timestamp_millis(sub.renew_date).into()),
                         rewewal_price: sub.price.into(),

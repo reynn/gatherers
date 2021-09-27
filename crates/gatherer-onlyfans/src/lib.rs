@@ -76,10 +76,10 @@ impl OnlyFans {
         };
 
         if !s.valididate_token().await {
-            Err(Box::new(GathererErrors::FailedToInitialize(
-                "".into(),
-                "".into(),
-            )))
+            Err(Box::new(GathererErrors::FailedToInitialize {
+                gatherer_name: "onlyfans".into(),
+                err: "Failed to validate auth".into(),
+            }))
         } else {
             Ok(s)
         }
@@ -134,7 +134,7 @@ impl Gatherer for OnlyFans {
     async fn gather_media_from_stories(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
         todo!()
     }
-    
+
     async fn gather_media_from_bundles(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
         todo!()
     }

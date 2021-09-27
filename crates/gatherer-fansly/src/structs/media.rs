@@ -71,7 +71,7 @@ pub struct MediaDetails {
     pub filename: String,
     pub width: Option<i64>,
     pub height: Option<i64>,
-    pub metadata: String,
+    pub metadata: Option<String>,
     #[serde(rename = "updatedAt")]
     pub updated_at: Option<i64>,
     #[serde(rename = "createdAt")]

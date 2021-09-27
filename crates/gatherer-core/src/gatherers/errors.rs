@@ -15,8 +15,8 @@ pub enum GathererErrors {
         gatherer_name: String,
         feature: String,
     },
-    #[error("Failed to initialize the {0} gatherer, error received: {1}")]
-    FailedToInitialize(String, String),
+    #[error("Failed to initialize the {gatherer_name} gatherer, error received: {err}")]
+    FailedToInitialize { gatherer_name: String, err: String },
     #[error("Gatherer, {gatherer_name}, is enabled but there is no value provided for {option}")]
     OptionNotProvided {
         gatherer_name: String,
@@ -28,7 +28,7 @@ pub enum GathererErrors {
     InvalidCredentials { name: String, msg: String },
     #[error("API Error: Status Code {status}")]
     HttpError {
-        status: reqwest::StatusCode,
+        status: surf::StatusCode,
         response_body: Option<String>,
     },
 

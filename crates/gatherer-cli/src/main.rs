@@ -4,31 +4,36 @@
 mod cli;
 mod config;
 
+use async_task::Task;
 use cli::*;
 use config::{Config, ConfigErrors};
+use futures::Future;
 use gatherer_core::{
+    self,
     directories::Directories,
-    downloaders::*,
+    downloaders::{Downloadable, Downloader, MultiThreadedDownloader, SequentialDownloader},
     gatherers::{self, Gatherer, Media},
-    AsyncResult,
+    tasks::spawn_on_thread,
+    AsyncResult, *,
 };
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
     process::exit,
     sync::Arc,
+    time::{Duration, Instant},
 };
-use tabled::{Style, Table};
-use tokio::join;
 use tracing::{debug, error, info, Level};
 use tracing_subscriber::FmtSubscriber;
 
-#[tokio::main]
-async fn main() {
-    match run().await {
-        Ok(_) => println!("Gathering completed"),
-        Err(err) => println!("Gatherers has encountered an error {:?}", err),
-    }
+// #[tokio::main]
+fn main() {
+    smol::block_on(async {
+        match run().await {
+            Ok(_) => println!("Gathering completed"),
+            Err(err) => println!("Gatherers has encountered an error {:?}", err),
+        }
+    });
 }
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -80,117 +85,79 @@ async fn run() -> Result<()> {
 
     #[cfg(feature = "fansly")]
     add_fansly_gatherer(&config, &mut gatherers).await?;
+    #[cfg(feature = "onlyfans")]
+    add_onlyfans_gatherer(&config, &mut gatherers).await?;
 
     if gatherers.is_empty() {
         println!("No gatherers to run");
         exit(0);
     }
 
-    // Initialize our downloader
-    let downloader = Downloader::new(&config.downloaders);
+    let (tx, rx) = async_channel::unbounded();
 
-    let downloads_directory = if let Some(cli_download_dir) = &cli.download_to {
+    // Initialize our downloader
+    let downloader = MultiThreadedDownloader::new(cli.worker_count, rx);
+
+    let downloads_directory = if let Some(cli_download_dir) = &cli.target_folder {
         cli_download_dir.to_owned()
-    } else if let Some(config_download_dir) = &config.downloaders.storage_dir {
-        config_download_dir.to_owned()
     } else {
-        Path::new(".").join("downloads").to_path_buf()
+        Path::new(&config.download_dir).to_path_buf()
     };
-    // Go through all gatherers and run through a sequence of requests to scrape data from the provider APIs
+
+    let mut primary_threads = Vec::new();
+
     for gatherer in gatherers.into_iter() {
-        let gatherer_name = gatherer.name();
-        let config = Arc::clone(&config);
-        println!("Getting subscriptions for {}", gatherer_name);
-        let gatherer_downloads_directory = downloads_directory
-            .clone()
-            .join(gatherer_name.to_lowercase());
-        // Get a list of subscriptions
-        let downloader = downloader.clone();
-        // Start our gatherings, inner logic should probably be moved to a different func
-        match gatherer.gather_subscriptions().await {
-            Ok(subs) => {
-                if subs.is_empty() {
-                    error!("No subscriptions for {}", gatherer_name);
-                };
-                let subs = subs.into_iter().take(5).collect::<Vec<_>>();
-                let subs_config = config.clone();
+        let gatherers_downloader = tx.clone();
+        primary_threads.push(spawn_on_thread({
+            let base_path = downloads_directory.clone();
+            let download_tx = tx.clone();
+            let limits = gatherers::RunLimits {
+                media: cli.limit_media,
+                subscriptions: cli.limit_subs,
+            };
+            async move {
+                let gatherer_name = gatherer.name();
+                let start_time = Instant::now();
                 println!(
-                    "Found {} subs for {}\n{}",
-                    subs.len(),
-                    gatherer_name,
-                    Table::new(&subs).with(Style::pseudo_clean())
+                    "{}: Starting to gather for all subscriptions.",
+                    gatherer_name
                 );
-                info!(
-                    "Found subscription ids: {}",
-                    subs.iter()
-                        .map(|sub| &sub.id[..])
-                        .collect::<Vec<&str>>()
-                        .join(",")
-                );
-                for sub in subs {
-                    println!(
-                        "{} is getting data for subscriber: {}",
-                        gatherer_name, sub.name
-                    );
-                    let subscription_downloads_directory =
-                        gatherer_downloads_directory.join(&sub.name.username.to_lowercase());
-                    let sub_gatherer = gatherer.clone();
-                    let subs_config = subs_config.clone();
-                    let downloader = downloader.clone();
-                    tokio::spawn(async move {
-                        let gatherer_name = sub_gatherer.name();
-                        match gatherers::run_gatherer_for_subscription(sub_gatherer, &sub).await {
-                            Ok(medias) => {
-                                let downloadables = medias
-                                    .into_iter()
-                                    // .take(50)
-                                    .map(|media| {
-                                        let downloadable_path = subscription_downloads_directory
-                                            .clone()
-                                            .join(if media.paid { "paid" } else { "free" });
-                                        Downloadable::from_media_with_path(
-                                            &media,
-                                            downloadable_path,
-                                        )
-                                    })
-                                    .collect();
-                                tokio::spawn(async move {
-                                    let response =
-                                        downloader.add_downloadables(downloadables).await;
-                                    match response {
-                                        Ok(_) => {
-                                            debug!("Successfully sent post content items to the download queue");
-                                        }
-                                        Err(err) => {
-                                            error!("Failed to send items to the queue: {}", err);
-                                        }
-                                    }
-                                });
-                            }
-                            Err(gatherer_err) => error!(
-                                "The {} gatherer was unable to get subscriptions. {:?}",
-                                gatherer_name, gatherer_err
-                            ),
-                        }
-                    });
+                match gatherers::run_gatherer_for_all(gatherer, base_path, download_tx, limits)
+                    .await
+                {
+                    Ok(_) => println!(
+                        "{}: Finished after {:.2} seconds",
+                        gatherer_name,
+                        Instant::now().duration_since(start_time).as_secs_f64()
+                    ),
+                    Err(gatherer_err) => {
+                        error!("{}: Failed to complete. {:?}", gatherer_name, gatherer_err)
+                    }
                 }
             }
-            Err(subs_err) => {
-                error!("Subscription error: {:?}", subs_err)
-            }
-        }
+        }));
     }
 
-    match downloader.process_downloads().await {
-        Ok(stats) => {
-            println!("Download results: {:?}", stats);
-            Ok(())
-        }
-        Err(download_err) => {
-            println!("Failed to process all downloads. {:?}", download_err);
-            Err(download_err)
-        }
-    }
+    primary_threads.insert(
+        0,
+        spawn_on_thread(async move {
+            println!("Starting downloader..");
+            let start_time = Instant::now();
+            match downloader.process_all_items().await {
+                Ok(stats) => info!(
+                    "Successfully completed downloads: {:?}. Took {:.2} seconds",
+                    stats,
+                    Instant::now().duration_since(start_time).as_secs_f32()
+                ),
+                Err(down_err) => error!("Failed to process downloads: {:?}", down_err),
+            }
+        }),
+    );
+
+    drop(tx);
+    futures::future::join_all(primary_threads).await;
+    // info!("Expected {} total downloads");
+    Ok(())
 }
 
 #[cfg(feature = "fansly")]
@@ -199,16 +166,32 @@ async fn add_fansly_gatherer(
     gatherers: &mut Vec<Arc<dyn Gatherer>>,
 ) -> AsyncResult<()> {
     if config.fansly.enabled {
-        let fansly_gatherer = gatherer_fansly::Fansly::new(
-            Arc::new(config.fansly.clone()),
-            Arc::new(config.api_config.clone()),
-        )
-        .await?;
-        gatherers.push(Arc::new(fansly_gatherer));
-        Ok(())
-    } else {
-        Ok(())
-    }
+        gatherers.push(Arc::new(
+            gatherer_fansly::Fansly::new(
+                Arc::new(config.fansly.clone()),
+                Arc::new(config.api_config.clone()),
+            )
+            .await?,
+        ));
+    };
+    Ok(())
+}
+
+#[cfg(feature = "onlyfans")]
+async fn add_onlyfans_gatherer(
+    config: &'_ Config,
+    gatherers: &mut Vec<Arc<dyn Gatherer>>,
+) -> AsyncResult<()> {
+    if config.onlyfans.enabled {
+        gatherers.push(Arc::new(
+            gatherer_onlyfans::OnlyFans::new(
+                Arc::new(config.onlyfans.clone()),
+                Arc::new(config.api_config.clone()),
+            )
+            .await?,
+        ));
+    };
+    Ok(())
 }
 
 fn init_logging(cli: &'_ Cli) {
@@ -228,5 +211,4 @@ fn init_logging(cli: &'_ Cli) {
     let tracing_subscriber = tracing_subscriber_builder.finish();
     tracing::subscriber::set_global_default(tracing_subscriber)
         .expect("setting default subscriber failed");
-    debug!("{:#?}", &cli);
 }

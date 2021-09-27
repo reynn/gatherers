@@ -39,20 +39,49 @@ pub mod inner {
         pub updated_at: i64,
     }
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize)]
     pub struct Posts {
         pub posts: Option<Vec<crate::structs::Post>>,
-        // #[serde(rename = "aggregatedPosts")]
-        // pub aggregated_posts: Vec<String>,
+        #[serde(rename = "aggregatedPosts")]
+        pub aggregated_posts: Option<Vec<crate::structs::Post>>,
         #[serde(rename = "accountMediaBundles")]
-        pub account_media_bundles: Vec<crate::structs::Media>,
+        pub account_media_bundles: Option<Vec<crate::structs::Media>>,
         #[serde(rename = "accountMedia")]
-        pub account_media: Vec<crate::structs::Media>,
+        pub account_media: Option<Vec<crate::structs::Media>>,
         // pub accounts: Vec<Account>,
-        pub tips: Vec<String>,
+        pub tips: Option<Vec<String>>,
         // #[serde(rename = "tipGoals")]
         // pub tip_goals: Option<Vec<TipGoals>>,
         pub stories: Option<Vec<crate::structs::Story>>,
+    }
+
+    impl std::fmt::Debug for Posts {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let posts_count = if let Some(posts) = &self.posts {
+                posts.len()
+            } else {
+                0
+            };
+            // write!(f, "Posts(post_count={})", &posts_count)
+            f.debug_struct("Posts").field("posts", &posts_count).finish_non_exhaustive()
+            //     .field("aggregated_posts", &self.aggregated_posts)
+            //     .field("account_media_bundles", &self.account_media_bundles)
+            //     .field("account_media", &self.account_media)
+            //     .field("tips", &self.tips)
+            //     .field("stories", &self.stories)
+            //     .finish()
+        }
+        // fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        //     // let posts_count = if let Some(posts) = &self.posts {} else {};
+        //     f.debug_struct("Posts")
+        //         .field("posts", &self.posts.unwrap_or(vec![]).len())
+        //         .field("aggregated_posts", &self.aggregated_posts.unwrap_or(vec![]).len())
+        //         .field("account_media_bundles", &self.account_media_bundles.len())
+        //         .field("account_media", &self.account_media.len())
+        //         .field("tips", &self.tips)
+        //         .field("stories", &self.stories.unwrap_or(vec![]).len())
+        //         .finish()
+        // }
     }
 
     #[derive(Debug, Serialize, Deserialize)]

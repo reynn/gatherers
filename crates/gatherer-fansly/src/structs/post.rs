@@ -63,7 +63,7 @@ pub struct AccountMedia {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BundleContent {
     #[serde(rename = "accountMediaId")]
-    pub account_media_id: String,
+    pub account_media_id: Option<String>,
     pub pos: i64,
 }
 
