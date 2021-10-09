@@ -181,8 +181,25 @@ impl Gatherer for Fansly {
         }
     }
 
-    async fn gather_media_from_stories(&self, _sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
-        Ok(Vec::new())
+    async fn gather_media_from_stories(&self, sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {
+        match self.get_account_stories(&sub.id).await {
+            Ok(user_stories) => {
+                let story_content_ids: Vec<String> =
+                    user_stories.into_iter().map(|s| s.content_id).collect();
+                match self.get_media_by_ids(&story_content_ids).await {
+                    Ok(media) => Ok(media
+                        .into_iter()
+                        .filter_map(|fansly_media| match fansly_media.try_into() {
+                            Ok(link) => Some(link),
+                            Err(e) => None,
+                        })
+                        .collect()),
+                    Err(media_err) => Err(media_err),
+                }
+                // Ok(Vec::new())
+            }
+            Err(stories_err) => Err(stories_err),
+        }
     }
 
     async fn gather_media_from_bundles(&self, sub: &'_ Subscription) -> AsyncResult<Vec<Media>> {

@@ -3,6 +3,8 @@
 
 mod gatherer;
 mod responses;
+#[cfg(test)]
+mod responses_test;
 mod structs;
 
 use crate::structs::Message;
@@ -28,6 +30,9 @@ const FANSLY_API_MEDIA_BUNDLE_URL: &str = "https://apiv2.fansly.com/api/v1/accou
 const FANSLY_API_WALL_URL: &str = "https://apiv2.fansly.com/api/v1/wall/";
 const FANSLY_API_MESSAGE_GROUPS_URL: &str = "https://apiv2.fansly.com/api/v1/group";
 const FANSLY_API_GROUP_MESSAGES_URL: &str = "https://apiv2.fansly.com/api/v1/message";
+const FANSLY_API_FOLLOWED_ACCOUNTS_URL: &str =
+    "https://apiv2.fansly.com/api/v1/mediastories/following";
+const FANSLY_API_USER_STORIES_URL: &str = "https://apiv2.fansly.com/api/v1/mediastories";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FanslyConfig {
@@ -63,6 +68,18 @@ impl Fansly {
             Ok(_) => Ok(s),
             Err(e) => Err(e),
         }
+    }
+
+    pub async fn get_user_accounts_by_names(
+        &self,
+        names: &[String],
+    ) -> AsyncResult<responses::AccountsResponse> {
+        let endpoint = format!(
+            "{}?usernames={}",
+            FANSLY_API_USER_ACCOUNT_URL,
+            names.join(",")
+        );
+        Ok(self.http_client.get(&endpoint, None).await?)
     }
 
     pub async fn get_user_accounts_by_ids(
@@ -150,7 +167,7 @@ impl Fansly {
                         && post_response.response.posts.is_none()
                         && post_response.response.stories.is_none()
                     {
-                        break
+                        break;
                     }
                     if let Some(user_posts) = &post_response.response.posts {
                         if user_posts.len() < FANLSY_POST_LIMIT_COUNT && user_posts.is_empty() {
@@ -180,7 +197,7 @@ impl Fansly {
         match subs {
             Ok(resp) => {
                 if resp.success {
-                    let sub_account_ids: Vec<String> = resp
+                    let mut sub_account_ids: Vec<String> = resp
                         .response
                         .subscriptions
                         .iter()
@@ -192,7 +209,23 @@ impl Fansly {
                             }
                         })
                         .collect();
-                    debug!("Subscription ids: {:?}", sub_account_ids);
+                    tracing::info!(
+                        "Found {} accounts that are being subscribed to",
+                        sub_account_ids.len()
+                    );
+                    if let Ok(account_stubs) = self.get_followed_accounts_stubs().await {
+                        let mut stub_ids: Vec<String> =
+                            account_stubs.into_iter().map(|s| s.account_id).collect();
+                        tracing::info!(
+                            "Found {} accounts that are being followed but not subscribed to",
+                            stub_ids.len()
+                        );
+                        sub_account_ids.append(&mut stub_ids)
+                    };
+                    tracing::info!(
+                        "Total accounts (subs + followed) = {}",
+                        sub_account_ids.len()
+                    );
                     // get the full user account info so we can attach extra data to our subscription info
                     match self.get_user_accounts_by_ids(&sub_account_ids).await {
                         Ok(account_infos) => {
@@ -233,6 +266,23 @@ impl Fansly {
             Ok(resp) => Ok(resp.response.groups),
             Err(groups_err) => Err(format!("{:?}", groups_err).into()),
         }
+    }
+
+    pub async fn get_followed_accounts_stubs(&self) -> AsyncResult<Vec<structs::FollowedAccount>> {
+        let endpoint = format!("{}?limit={}&offset=0", FANSLY_API_MEDIA_BUNDLE_URL, 100);
+        let followed = self
+            .http_client
+            .get::<responses::FollowedAccountsResponse>(&endpoint, self.get_default_headers())
+            .await;
+        match followed {
+            Ok(resp) => Ok(resp.response),
+            Err(resp_err) => Err(resp_err),
+        }
+    }
+
+    pub async fn get_account_stories(&self, account_id: &'_ str) -> AsyncResult<Vec<structs::Story>> {
+        let endpoint = format!("{}?accountId={}", FANSLY_API_USER_STORIES_URL, account_id);
+        Ok(self.http_client.get(&endpoint, None).await?)
     }
 
     pub async fn get_all_messages_from_group(
