@@ -6,7 +6,7 @@ mod post;
 mod subscription;
 mod story;
 
-pub use account::Account;
+pub use account::{Account, FollowedAccount};
 pub use media::Media;
 pub use media_bundle::MediaBundle;
 pub use message::{Message, MessageGroup};

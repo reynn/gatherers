@@ -42,6 +42,20 @@ pub struct Account {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct FollowedAccount {
+    #[serde(rename = "accountId")]
+    pub account_id: String,
+    pub status: i64,
+    #[serde(rename = "storyCount")]
+    pub story_count: i64,
+    pub version: i64,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: i64
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Avatar {
     pub id: String,
     #[serde(rename = "type")]

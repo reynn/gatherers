@@ -1,4 +1,3 @@
-use super::structs::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -7,12 +6,14 @@ pub struct FanslyResponse<T> {
     pub success: bool,
 }
 
-pub type AccountsResponse = FanslyResponse<Vec<Account>>;
+pub type AccountsResponse = FanslyResponse<Vec<crate::structs::Account>>;
 pub type SubscriptionResponse = FanslyResponse<inner::Subscriptions>;
 pub type StatusResponse = FanslyResponse<inner::Status>;
 pub type PostsResponse = FanslyResponse<inner::Posts>;
-pub type MediaResponse = FanslyResponse<Vec<Media>>;
-pub type MediaBundleResponse = FanslyResponse<Vec<MediaBundle>>;
+pub type MediaResponse = FanslyResponse<Vec<crate::structs::Media>>;
+pub type MediaBundleResponse = FanslyResponse<Vec<crate::structs::MediaBundle>>;
+pub type FollowedAccountsResponse = FanslyResponse<Vec<crate::structs::FollowedAccount>>;
+pub type AccountStoriesResponse = FanslyResponse<Vec<crate::structs::Story>>;
 pub type MessageGroupsResponse = FanslyResponse<inner::MessageGroups>;
 pub type GroupMessagesResponse = FanslyResponse<inner::GroupMessages>;
 
@@ -62,26 +63,8 @@ pub mod inner {
             } else {
                 0
             };
-            // write!(f, "Posts(post_count={})", &posts_count)
             f.debug_struct("Posts").field("posts", &posts_count).finish_non_exhaustive()
-            //     .field("aggregated_posts", &self.aggregated_posts)
-            //     .field("account_media_bundles", &self.account_media_bundles)
-            //     .field("account_media", &self.account_media)
-            //     .field("tips", &self.tips)
-            //     .field("stories", &self.stories)
-            //     .finish()
         }
-        // fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        //     // let posts_count = if let Some(posts) = &self.posts {} else {};
-        //     f.debug_struct("Posts")
-        //         .field("posts", &self.posts.unwrap_or(vec![]).len())
-        //         .field("aggregated_posts", &self.aggregated_posts.unwrap_or(vec![]).len())
-        //         .field("account_media_bundles", &self.account_media_bundles.len())
-        //         .field("account_media", &self.account_media.len())
-        //         .field("tips", &self.tips)
-        //         .field("stories", &self.stories.unwrap_or(vec![]).len())
-        //         .finish()
-        // }
     }
 
     #[derive(Debug, Serialize, Deserialize)]
