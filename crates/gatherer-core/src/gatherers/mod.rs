@@ -135,17 +135,17 @@ pub async fn run_gatherer_for_all(
             };
 
             for sub in subscriptions.iter() {
-                // for gather_type in GatherType::iter() {
+                for gather_type in GatherType::iter() {
                     let info = GathererInfo {
                         base_path: base_path.clone().join(&sub.name.username),
-                        gather_type: GatherType::Stories,
+                        gather_type,
                         gatherer: gatherer.clone(),
                         subscription: sub.clone(),
                         downloader: download_tx.clone(),
                         name: gatherer_name.into(),
                     };
                     subs_tasks.push(run_gatherer(info));
-                // }
+                }
             }
         }
         Err(sub_err) => return Err(sub_err),
