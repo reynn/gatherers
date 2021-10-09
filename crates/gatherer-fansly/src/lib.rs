@@ -282,7 +282,14 @@ impl Fansly {
 
     pub async fn get_account_stories(&self, account_id: &'_ str) -> AsyncResult<Vec<structs::Story>> {
         let endpoint = format!("{}?accountId={}", FANSLY_API_USER_STORIES_URL, account_id);
-        Ok(self.http_client.get(&endpoint, None).await?)
+        let stories = self
+            .http_client
+            .get::<responses::AccountStoriesResponse>(&endpoint, self.get_default_headers())
+            .await;
+        match stories {
+            Ok(resp) => Ok(resp.response),
+            Err(resp_err) => Err(resp_err),
+        }
     }
 
     pub async fn get_all_messages_from_group(

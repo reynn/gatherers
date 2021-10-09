@@ -13,6 +13,7 @@ pub type PostsResponse = FanslyResponse<inner::Posts>;
 pub type MediaResponse = FanslyResponse<Vec<crate::structs::Media>>;
 pub type MediaBundleResponse = FanslyResponse<Vec<crate::structs::MediaBundle>>;
 pub type FollowedAccountsResponse = FanslyResponse<Vec<crate::structs::FollowedAccount>>;
+pub type AccountStoriesResponse = FanslyResponse<Vec<crate::structs::Story>>;
 pub type MessageGroupsResponse = FanslyResponse<inner::MessageGroups>;
 pub type GroupMessagesResponse = FanslyResponse<inner::GroupMessages>;
 
