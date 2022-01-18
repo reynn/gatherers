@@ -1,0 +1,20 @@
+[package]
+edition = "2021"
+name    = "gatherer-onlyfans"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait   = "0.1"
+chrono        = "0.4"
+data-encoding = "2.3"
+gatherer-core = { path = "../core" }
+log           = "0.4"
+serde         = { version = "1.0", features = ["derive"] }
+sha-1         = "0.10"
+
+  [dependencies.cookie]
+  default-features = false
+  features         = ["key-expansion"]
+  version          = "0.16.0-rc.1"
