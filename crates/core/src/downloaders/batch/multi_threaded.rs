@@ -8,6 +8,7 @@ use futures::{lock::Mutex, StreamExt};
 use futures_lite::prelude::*;
 // use futures_lite::{future, StreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use std::fmt::Formatter;
 use std::{sync::Arc, thread, time::Duration};
 
 #[derive(Debug)]
@@ -37,8 +38,18 @@ impl Default for MultiThreadedDownloader {
     }
 }
 
+impl std::fmt::Display for MultiThreadedDownloader {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
 #[async_trait::async_trait]
 impl BatchDownloader for MultiThreadedDownloader {
+    fn name(&self) -> String {
+        "multi-threaded".into()
+    }
+
     async fn add_item_to_queue(&self, item: Downloadable) -> crate::Result<()> {
         Ok(())
     }

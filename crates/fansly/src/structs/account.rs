@@ -24,8 +24,8 @@ pub struct Account {
     pub profile_access_flags: i64,
     #[serde(rename = "profileFlags")]
     pub profile_flags: i64,
-    pub about: String,
-    pub location: String,
+    // pub about: String,
+    pub location: Option<String>,
     #[serde(rename = "subscriptionTiers")]
     pub subscription_tiers: Option<Vec<SubscriptionTier>>,
     pub avatar: Option<super::Media>,
@@ -52,7 +52,7 @@ pub struct FollowedAccount {
     #[serde(rename = "createdAt")]
     pub created_at: i64,
     #[serde(rename = "updatedAt")]
-    pub updated_at: i64
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -177,6 +177,6 @@ pub struct Wall {
     #[serde(rename = "accountId")]
     pub account_id: String,
     pub name: String,
-    pub description: String,
+    pub description: Option<String>,
     pub metadata: String,
 }

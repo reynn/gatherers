@@ -47,6 +47,8 @@ fn main() {
                 loaded
             }
             Err(load_err) => {
+                log::error!("Failed to load config from {:?}. Using default", cfg_path);
+                log::debug!("Failed to load config file. Error: {:?}", load_err);
                 Arc::new(Config::default())
             }
         };
@@ -99,9 +101,8 @@ async fn get_available_gatherers(
     Ok(gatherers)
 }
 
-// returns the flexi_logger handle so it isn't dropped before the end of the main logic
 fn init_logging(cli: &'_ Cli) -> gatherer_core::Result<()> {
-    fern::Dispatch::new()
+    let mut fern_logger = fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
                 "[{}][{}] {}",
@@ -110,7 +111,7 @@ fn init_logging(cli: &'_ Cli) -> gatherer_core::Result<()> {
                 message
             ))
         })
-        .level(match cli.verbose {
+        .level(match &cli.verbose {
             0 => LevelFilter::Error,
             1 => LevelFilter::Info,
             2 => LevelFilter::Debug,
@@ -120,16 +121,10 @@ fn init_logging(cli: &'_ Cli) -> gatherer_core::Result<()> {
         .filter(|metadata| !metadata.target().starts_with("async_io"))
         .filter(|metadata| !metadata.target().starts_with("async_h1"))
         .filter(|metadata| !metadata.target().starts_with("rustls"))
-        .chain(std::io::stdout())
-        .apply()?;
+        .chain(std::io::stdout());
+    if let Some(log_path) = &cli.log_file {
+        fern_logger = fern_logger.chain(fern::log_file(log_path)?);
+    }
+    fern_logger.apply()?;
     Ok(())
-    // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.) will be written to stdout.
-    // Ok(flexi_logger::Logger::try_with_str(match cli.verbose {
-    //     0 => "error",
-    //     1 => "info",
-    //     2 => "debug",
-    //     _ => "trace",
-    // })?
-    // .adaptive_format_for_stdout(flexi_logger::AdaptiveFormat::Default)
-    // .start()?)
 }

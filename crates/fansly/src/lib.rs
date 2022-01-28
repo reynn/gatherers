@@ -8,8 +8,6 @@
 mod constants;
 mod gatherer;
 mod responses;
-#[cfg(test)]
-mod responses_test;
 mod structs;
 
 pub use self::gatherer::*;
@@ -19,6 +17,7 @@ use gatherer_core::{
     http::{self, Client, ClientConfig, Headers, Url},
     Result,
 };
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path, sync::Arc};
 
@@ -44,7 +43,6 @@ impl Fansly {
             }));
         };
 
-        log::info!("Initializing Fansly...");
         let api_config = ClientConfig {
             base_url: Some(constants::BASE_URL.to_string()),
         };
@@ -185,7 +183,6 @@ impl Fansly {
     ) -> Result<Vec<responses::inner::Posts>> {
         let mut posts: Vec<responses::inner::Posts> = Vec::new();
         let mut more_pages = true;
-        let mut offset: usize = 0;
         let mut before_post_id = String::from("0");
 
         while more_pages {
@@ -217,16 +214,14 @@ impl Fansly {
                         {
                             more_pages = false
                         }
-                        user_posts.iter().for_each(|post| {
-                            before_post_id = post.id.to_string();
-                        });
+                        if let Some(last_post) = user_posts.iter().last() {
+                            before_post_id = last_post.id.to_string();
+                        };
                         posts.push(post_response.response);
-                        log::debug!("Got page {} of users posts", offset + 1);
                     }
                 }
                 Err(err) => return Err(err),
             }
-            offset += 1;
         }
 
         Ok(posts)
@@ -304,6 +299,7 @@ impl Fansly {
     }
 
     pub async fn get_messages_groups(&self) -> Result<Vec<structs::MessageGroup>> {
+        let re = Regex::new(r#"(\\u.*?)( |\.\.\.)"#).unwrap();
         let endpoint = constants::MESSAGE_GROUPS_URL;
         let all_groups_resp = self
             .http_client
@@ -311,7 +307,8 @@ impl Fansly {
             .await;
         match all_groups_resp {
             Ok(resp) => {
-                let groups: responses::MessageGroupsResponse = resp.as_json().await?;
+                let groups: responses::MessageGroupsResponse =
+                    resp.as_json_with_strip(Some(&re)).await?;
                 Ok(groups.response.groups)
             }
             Err(groups_err) => {
@@ -321,6 +318,7 @@ impl Fansly {
     }
 
     pub async fn get_followed_accounts_stubs(&self) -> Result<Vec<structs::FollowedAccount>> {
+        let re = Regex::new(r#"(\\u.*?)( |\.\.\.)"#).unwrap();
         let endpoint = format!("{}?limit={}&offset=0", constants::MEDIA_BUNDLE_URL, 100);
         let followed = self
             .http_client
@@ -328,7 +326,8 @@ impl Fansly {
             .await;
         match followed {
             Ok(resp) => {
-                let accounts: responses::FollowedAccountsResponse = resp.as_json().await?;
+                let accounts: responses::FollowedAccountsResponse =
+                    resp.as_json_with_strip(Some(&re)).await?;
                 Ok(accounts.response)
             }
             Err(resp_err) => Err(resp_err),
@@ -354,33 +353,100 @@ impl Fansly {
         &self,
         group_id: &'_ str,
     ) -> Result<Vec<structs::Message>> {
-        let endpoint = format!(
-            "{}?groupId={}&limit={}",
-            constants::GROUP_MESSAGES_URL,
-            &group_id,
-            constants::GROUP_MESSAGES_LIMIT
-        );
-        let resp_res = self
-            .http_client
-            .get(&endpoint, self.get_default_headers())
-            .await;
+        let mut messages = Vec::new();
+        let mut has_more = true;
+        let mut before: Option<i64> = None;
 
-        match resp_res {
-            Ok(resp) => {
-                let resp: responses::GroupMessagesResponse = resp.as_json().await?;
-                log::debug!("Response for thread {}. {:?}", group_id, resp.response);
-                Ok(resp.response.messages)
+        while has_more {
+            let endpoint = if let Some(before) = before {
+                format!(
+                    "{}?groupId={}&limit={}&before={}",
+                    constants::GROUP_MESSAGES_URL,
+                    &group_id,
+                    constants::GROUP_MESSAGES_LIMIT,
+                    before
+                )
+            } else {
+                format!(
+                    "{}?groupId={}&limit={}",
+                    constants::GROUP_MESSAGES_URL,
+                    &group_id,
+                    constants::GROUP_MESSAGES_LIMIT
+                )
+            };
+            let resp_res = self
+                .http_client
+                .get(&endpoint, self.get_default_headers())
+                .await;
+
+            match resp_res {
+                Ok(resp) => {
+                    let mut group_messages: responses::GroupMessagesResponse =
+                        resp.as_json().await?;
+                    log::debug!(
+                        "Response for thread {}. {:?}",
+                        group_id,
+                        group_messages.response
+                    );
+                    if let Some(last_message) = group_messages.response.messages.iter().last() {
+                        before = Some(last_message.created_at);
+                    }
+                    has_more = group_messages.response.messages.len()
+                        == constants::GROUP_MESSAGES_LIMIT as usize;
+                    messages.append(&mut group_messages.response.messages);
+                }
+                Err(message_err) => log::error!(
+                    "Failed to get messages from group {}. {:?}",
+                    group_id,
+                    message_err
+                ),
             }
-            Err(message_err) => Err(format!(
-                "Failed to get messages from group {}. {:?}",
-                group_id, message_err,
-            )
-            .into()),
         }
+        Ok(messages)
     }
 
     pub async fn get_purchased_content(&self) -> Result<Vec<structs::PurchasedMedia>> {
         Ok(Vec::new())
+    }
+
+    pub async fn get_transaction_details(
+        &self,
+        user_names: &[String],
+    ) -> Result<Vec<structs::WalletTransaction>> {
+        let mut all_transactions = Vec::new();
+        let mut offset = 0;
+
+        loop {
+            let endpoint = format!("/api/v1/account/wallets/transactions?before=&after=&limit=10&offset={offset}");
+            let result = self
+                .http_client
+                .get(&endpoint, self.get_default_headers())
+                .await;
+
+            match result {
+                Ok(resp) => {
+                    let transactions: Result<responses::WalletTransactionsResponse> =
+                        resp.as_json().await;
+                    match transactions {
+                        Ok(mut transactions) => {
+                            offset += transactions.response.data.len();
+                            all_transactions.append(&mut transactions.response.data);
+                            if all_transactions.len() >= transactions.response.total as usize {
+                                break;
+                            }
+                        }
+                        Err(json_err) => {
+                            log::error!("Transaction data not in expected format. {:?}", json_err)
+                        }
+                    }
+                }
+                Err(err) => {
+                    log::error!("Unable to get transaction data from {}. {:?}", endpoint, err)
+                }
+            }
+        }
+
+        Ok(all_transactions)
     }
 }
 
@@ -433,14 +499,13 @@ fn fansly_details_to_gatherers_media(
     loc: &'_ str,
     purchased: bool,
 ) -> gatherers::Media {
-    let file_name = Path::new(&details.filename);
-    let ext = match file_name.extension() {
+    let ext = match Path::new(&details.file_name).extension() {
         Some(ext) => ext.to_str().unwrap(),
         None => {
             let mimetype = &details.mimetype;
             log::error!(
                 "File name `{}` does not have an extension. Inferring from mimetype: {}",
-                file_name.display(),
+                details.file_name,
                 &mimetype
             );
             mimetype.split('/').last().unwrap()
@@ -454,21 +519,21 @@ fn fansly_details_to_gatherers_media(
     }
 }
 
-fn fansly_media_to_gatherers_media(fansly: structs::Media) -> Option<gatherers::Media> {
-    log::trace!("Converting to gatherer_core::Media. {:?}", fansly);
-    if let Some(details) = &fansly.details {
+fn fansly_media_to_gatherers_media(media: structs::Media) -> Option<gatherers::Media> {
+    log::trace!("Converting to gatherer_core::Media. {:?}", media);
+    if let Some(details) = &media.details {
         if let Some(location) = &details.locations.get(0) {
             Some(fansly_details_to_gatherers_media(
                 details,
                 &location.location[..],
-                fansly.purchased,
+                media.purchased,
             ))
         } else {
-            log::debug!("Unable to determine a location for {}", details.filename);
+            log::debug!("Unable to determine a location for {}", details.file_name);
             None
         }
     } else {
-        log::debug!("Unable to find details for {}", fansly.id);
+        log::debug!("Unable to find details for {}", media.id);
         None
     }
 }

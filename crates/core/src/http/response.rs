@@ -1,3 +1,5 @@
+use regex::Regex;
+
 #[derive(Debug)]
 pub struct Response(surf::Response);
 
@@ -34,26 +36,38 @@ impl Response {
         T: for<'de> serde::Deserialize<'de>,
     {
         let mut s = self.0;
-        match s.body_bytes().await {
-            Ok(bytes) => {
-                // let bytes = bytes.to_ascii_lowercase();
-                match String::from_utf8(bytes) {
-                    Ok(body) => match serde_json::from_str(&body) {
-                        Ok(res) => Ok(res),
-                        Err(serde_err) => Err(format!(
-                            "Failed to read body {} as json. {:?}",
-                            body, serde_err
-                        )
-                        .into()),
-                    },
-                    Err(from_utf8_err) => Err(format!(
-                        "Failed to read response body as a UTF-8 string. {:?}",
-                        from_utf8_err
+        match s.body_string().await {
+            Ok(body) => match serde_json::from_str(&body) {
+                Ok(res) => Ok(res),
+                Err(serde_err) => {
+                    Err(format!("Failed to read body {} as json. {:?}", body, serde_err).into())
+                }
+            },
+            Err(err) => Err(format!("Failed to get the response body: {:?}", err).into()),
+        }
+    }
+    /// Give an opportunity to strip odd characters out of the JSON before sending through Serde
+    pub async fn as_json_with_strip<T>(self, re: Option<&'_ Regex>) -> crate::Result<T>
+    where
+        T: for<'de> serde::Deserialize<'de>,
+    {
+        let mut s = self.0;
+        match s.body_string().await {
+            Ok(body) => {
+                let mut body_json = body;
+                if let Some(re) = re {
+                    body_json = re.replace_all(&body_json, "").to_string();
+                }
+                match serde_json::from_str(&body_json) {
+                    Ok(res) => Ok(res),
+                    Err(serde_err) => Err(format!(
+                        "Failed to read body {} as json. {:?}",
+                        body_json, serde_err
                     )
                     .into()),
                 }
             }
-            Err(err) => Err(format!("Failed to get the respone body as bytes: {:?}", err).into()),
+            Err(err) => Err(format!("Failed to get the response body: {:?}", err).into()),
         }
     }
 }

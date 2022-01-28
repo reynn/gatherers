@@ -62,10 +62,11 @@ impl OnlyFansBuilder {
         // Returns a ready to use OnlyFans gatherer
         let me_headers = crate::generate_request_headers(&config, constants::ME_URL, &dynamic_rule);
 
-        let curr_user: responses::MeResponse = match http_client.get(constants::ME_URL, Some(me_headers)).await {
-            Ok(me) => me.as_json().await?,
-            Err(me_err) => return Err(me_err),
-        };
+        let curr_user: responses::MeResponse =
+            match http_client.get(constants::ME_URL, Some(me_headers)).await {
+                Ok(me) => me.as_json().await?,
+                Err(me_err) => return Err(me_err),
+            };
 
         Ok(OnlyFans {
             config,

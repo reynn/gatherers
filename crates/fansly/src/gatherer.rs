@@ -1,7 +1,10 @@
+use crate::responses::AccountsResponse;
 use crate::{
     structs::{self, MessageGroup},
     Fansly,
 };
+use chrono::NaiveDateTime;
+use gatherer_core::gatherers::{DateTime, Transaction};
 use gatherer_core::{
     gatherers::{self, Gatherer, GathererErrors, Media, Subscription},
     Result,
@@ -12,6 +15,24 @@ use std::{convert::TryInto, time::Duration};
 impl Gatherer for Fansly {
     async fn gather_subscriptions(&self) -> Result<Vec<Subscription>> {
         self.get_account_subscriptions().await
+    }
+
+    async fn gather_media_from_bundles(&self, sub: &'_ Subscription) -> Result<Vec<Media>> {
+        let bundle_media = Vec::new();
+
+        let account = self.get_user_accounts_by_ids(&[sub.id.clone()]).await?;
+        let account = account.response.get(0).unwrap();
+
+        if let Some(avatar) = &account.avatar {
+            log::debug!("Adding avatar for {}", sub.name);
+        };
+
+        if let Some(banner) = &account.banner {
+            log::debug!("Adding banner for {}", sub.name);
+            let details = banner.details.as_ref();
+        };
+
+        Ok(bundle_media)
     }
 
     async fn gather_media_from_posts(&self, sub: &'_ Subscription) -> Result<Vec<Media>> {
@@ -75,11 +96,9 @@ impl Gatherer for Fansly {
         media_ids.append(&mut account_media_ids);
 
         // sort the ids so they are consecutive
-        log::debug!("");
         media_ids.sort();
         // dedup the list in just in case
         media_ids.dedup();
-        log::debug!("");
         // Get all discovered media file information
         let all_media = self.get_media_by_ids(&media_ids).await?;
         log::debug!(
@@ -100,7 +119,11 @@ impl Gatherer for Fansly {
         match groups {
             Ok(groups) => {
                 // TODO: might be a better way to do this without grabbing all of them first
-                log::debug!("Found {} total message threads from fansly", groups.len());
+                log::debug!(
+                    "{}: Found {} total message threads",
+                    self.name(),
+                    groups.len()
+                );
                 let subscription_threads: Vec<MessageGroup> = groups
                     .into_iter()
                     .filter(|group| {
@@ -168,12 +191,14 @@ impl Gatherer for Fansly {
                     )
                     .into()),
                 }
-
-                // Ok(messages_media)
             }
-            Err(group_err) => {
-                Err(format!("Failed to get message groups from Fansly. {:?}", group_err).into())
-            }
+            Err(group_err) => Err(format!(
+                "{}: Failed to get message groups for user {}. {}",
+                self.name(),
+                sub.name.username,
+                group_err
+            )
+            .into()),
         }
     }
 
@@ -198,48 +223,6 @@ impl Gatherer for Fansly {
         }
     }
 
-    async fn gather_media_from_bundles(&self, sub: &'_ Subscription) -> Result<Vec<Media>> {
-        let bundle_media = Vec::new();
-
-        let account = self.get_user_accounts_by_ids(&[sub.id.clone()]).await?;
-        let account = account.response.get(0).unwrap();
-
-        if let Some(avatar) = &account.avatar {
-            log::debug!("Adding avatar for {}", sub.name);
-            //     match super::fansly_media_to_gatherers_media(avatar_cl) {
-            //         Some(_) => todo!(),
-            //         None => todo!(),
-            //     }
-            //    //     bundle_media.push(media);
-            //    // };
-        };
-
-        if let Some(banner) = &account.banner {
-            log::debug!("Adding banner for {}", sub.name);
-            let details = banner.details.as_ref();
-            // bundle_media.push(Media {
-            //     file_name: details.filename.to_string(),
-            //     mime_type: details.mimetype.to_string(),
-            //     url: details
-            //         .locations
-            //         .get(0)
-            //         .map(|f| f.location.to_string())
-            //         .unwrap_or_default(),
-            //     paid: false,
-            // })
-        };
-
-        Ok(bundle_media)
-    }
-
-    fn name(&self) -> &'static str {
-        "fansly"
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.conf.enabled
-    }
-
     async fn gather_paid_content(&self) -> Result<Vec<Media>> {
         let purchased = self.get_purchased_content().await?;
         let media_ids: Vec<String> = purchased
@@ -251,5 +234,49 @@ impl Gatherer for Fansly {
             .into_iter()
             .filter_map(super::fansly_media_to_gatherers_media)
             .collect())
+    }
+
+    async fn gather_transaction_details(&self, user_names: &[String]) -> Result<Vec<Transaction>> {
+        match self.get_transaction_details(user_names).await {
+            Ok(transactions) => {
+                let user_ids = transactions
+                    .iter()
+                    .filter_map(|t| t.receiver_id.clone())
+                    .collect::<Vec<_>>();
+                let user_accounts: AccountsResponse =
+                    self.get_user_accounts_by_ids(&user_ids).await?;
+                let mut all_transaction_details = Vec::new();
+                for transaction in transactions {
+                    if let Some(receiver_id) = transaction.receiver_id {
+                        if let Some(account) = user_accounts
+                            .response
+                            .iter()
+                            .find(|account| account.id == receiver_id)
+                        {
+                            let date_time =
+                                NaiveDateTime::from_timestamp(transaction.created_at, 0);
+                            let amount = transaction.amount as f64 / 1000.;
+
+                            all_transaction_details.push(Transaction {
+                                total_amount: amount,
+                                user_name: account.username.clone(),
+                                date: Default::default(),
+                                description: None,
+                            })
+                        }
+                    }
+                }
+                Ok(all_transaction_details)
+            }
+            Err(transaction_err) => Err(transaction_err),
+        }
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.conf.enabled
+    }
+
+    fn name(&self) -> &'static str {
+        "fansly"
     }
 }

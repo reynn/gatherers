@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use crate::structs;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct FanslyResponse<T> {
     pub response: T,
     pub success: bool,
@@ -29,12 +30,13 @@ pub type StatusResponse = FanslyResponse<inner::Status>;
 // Response the consts::SUBS_URL endpoint
 pub type SubscriptionResponse = FanslyResponse<inner::Subscriptions>;
 // Response the consts::TRANSACTIONS_URL endpoint
-pub type TransactionsResponse = FanslyResponse<crate::structs::Transaction>;
+pub type TransactionsResponse = FanslyResponse<inner::Transaction<structs::Transaction>>;
 // Response the consts::WALLET_TRANSACTIONS_URL endpoint
-pub type WalletTransactionsResponse = FanslyResponse<crate::structs::WalletTransaction>;
+pub type WalletTransactionsResponse = FanslyResponse<inner::Transaction<structs::WalletTransaction>>;
 
 pub(crate) mod inner {
     use serde::{Deserialize, Serialize};
+    use crate::structs;
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Subscriptions {
@@ -48,6 +50,12 @@ pub(crate) mod inner {
     pub struct PurchasedContent {
         #[serde(rename = "accountMediaOrders")]
         pub account_media_orders: Vec<String>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Transaction<T> {
+        pub total: i64,
+        pub data: Vec<T>,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -94,6 +102,8 @@ pub(crate) mod inner {
     #[derive(Debug, Serialize, Deserialize)]
     pub struct MessageGroups {
         pub groups: Vec<crate::structs::MessageGroup>,
+        pub accounts: Vec<crate::structs::Account>,
+        pub total: i64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]

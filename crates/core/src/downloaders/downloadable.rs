@@ -1,5 +1,5 @@
 use super::InMemoryFileDownloader;
-use crate::{downloaders::DownloaderErrors, gatherers::structs::Media, Result};
+use crate::{downloaders::DownloaderErrors, gatherers::Media, Result};
 use async_fs::File;
 use futures_lite::{
     io::{copy, AsyncWriteExt, BufReader},

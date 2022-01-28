@@ -1,5 +1,5 @@
-use std::{convert::TryFrom, path::Path};
 use serde::{Deserialize, Serialize};
+use std::{convert::TryFrom, path::Path};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Media {
@@ -50,7 +50,7 @@ impl TryFrom<Media> for gatherer_core::gatherers::Media {
             if details.locations.is_empty() {
                 return Err(format!("Content not available: {:?}", details));
             }
-            let original_file_path = Path::new(&details.filename);
+            let original_file_path = Path::new(&details.file_name);
             // debug!("The original upload file name was {:?}", original_file_path);
             let mut file_name = media.id;
             file_name += &original_file_path
@@ -79,7 +79,8 @@ pub struct MediaDetails {
     #[serde(rename = "accountId")]
     pub account_id: String,
     pub mimetype: String,
-    pub filename: String,
+    #[serde(rename = "filename")]
+    pub file_name: String,
     pub width: Option<i64>,
     pub height: Option<i64>,
     pub metadata: Option<String>,

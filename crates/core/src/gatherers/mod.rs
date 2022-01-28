@@ -1,6 +1,6 @@
 //! Gatherer
 //!
-//! A `Gatherer` is responsible for collect content from whatever source it chooses to imlement.
+//! A `Gatherer` is responsible for collect content from whatever source it chooses to implement.
 //! Initially this is designed around getting **PAID** content from subscription sites.
 
 mod errors;
@@ -14,6 +14,7 @@ use crate::{
 };
 use async_channel::Sender;
 use chrono::prelude::*;
+use futures::future::err;
 use futures::Future;
 use std::{
     collections::HashMap,
@@ -88,6 +89,15 @@ pub trait Gatherer: std::fmt::Debug + Sync + Send {
             feature: "paid content".to_string(),
         }))
     }
+    async fn gather_transaction_details(
+        &self,
+        user_names: &[String],
+    ) -> Result<Vec<structs::Transaction>> {
+        Err(Box::new(GathererErrors::NotSupportedByGatherer {
+            gatherer_name: self.name().to_string(),
+            feature: "transactions".to_string(),
+        }))
+    }
     /// Provide whether the gatherer should be considered enabled
     fn is_enabled(&self) -> bool {
         false
@@ -115,16 +125,16 @@ async fn run_gatherer(info: structs::GathererInfo) -> Result<()> {
         gather_type,
         &sub.name.username
     );
+
     let all_media = match gather_type {
         GatherType::Posts => info.gatherer.gather_media_from_posts(&sub),
         GatherType::Messages => info.gatherer.gather_media_from_messages(&sub),
         GatherType::Bundles => info.gatherer.gather_media_from_bundles(&sub),
         GatherType::Stories => info.gatherer.gather_media_from_stories(&sub),
-        GatherType::Purchased => info.gatherer.gather_paid_content(),
-        // _ => {
-        //     info!("Skipped gathering {:?}", gather_type);
-        //     return Ok(());
-        // }
+        _ => {
+            log::info!("Skipped gathering {:?}", gather_type);
+            return Ok(());
+        }
     }
     .await;
 
@@ -158,41 +168,15 @@ async fn run_gatherer(info: structs::GathererInfo) -> Result<()> {
             }
             Ok(())
         }
-        Err(gather_err) => Err(format!(
-            "{}: Failed to gather {}. Error: {:?}",
-            name, gather_type, gather_err
-        )
-        .into()),
+        Err(gather_err) => {
+            let err_msg = format!(
+                "{:>12}: Failed to gather {}. Error: {:?}",
+                name, gather_type, gather_err
+            );
+            log::error!("{}", err_msg);
+            Err(err_msg.into())
+        }
     }
-}
-
-pub async fn run_gatherer_for_subscriber(
-    gatherer: Arc<dyn Gatherer>,
-    base_path: PathBuf,
-    download_tx: Sender<Downloadable>,
-    sub: &'_ Subscription,
-) -> Result<()> {
-    // Get a custom iter over our gatherable types, filtering out unneeded values for this function
-    let sub_gatherables: Vec<_> = GatherType::iter()
-        .filter(|t| !t.eq(&GatherType::Purchased))
-        .collect();
-    for gather_type in sub_gatherables.iter() {
-        let gatherer_name = gatherer.name().to_ascii_lowercase();
-        // Start building output directory for our gatherer
-        let base_path = base_path.join(&gatherer_name).join(&sub.name.username);
-        // TODO: likely a better way to achieve something like this in rust, defaulted to go style :'(
-        // This is the parameters fed into our gatherer
-        let info = structs::GathererInfo {
-            // Add the users name to the gatherers base path for output dir
-            base_path: base_path.clone().join(&sub.name.username),
-            gather_type: *gather_type,
-            gatherer: gatherer.clone(),
-            subscription: sub.clone(),
-            downloader: download_tx.clone(),
-            name: gatherer_name,
-        };
-    }
-    Ok(())
 }
 
 pub async fn run_gatherer_for_all(
@@ -201,36 +185,56 @@ pub async fn run_gatherer_for_all(
     download_tx: Sender<Downloadable>,
     limits: structs::RunLimits,
     user_names: &[String],
+    ignored_user_names: &[String],
 ) -> Result<()> {
-    let gatherer_name = gatherer.name();
-    let sub_result = gatherer.gather_subscriptions().await;
     let mut subs_tasks = Vec::new();
+    let gatherer_name = gatherer.name();
+    println!("{gatherer_name}: Getting subscriptions.");
+    let sub_result = gatherer.gather_subscriptions().await;
     match sub_result {
-        Ok(subscriptions) => {
-            println!(
-                "{}: Found {} subscriptions",
-                gatherer_name,
-                subscriptions.len()
-            );
-            let mut subscriptions = if limits.subscriptions == 0 {
-                subscriptions
-            } else {
-                log::debug!(
+        Ok(all_subscriptions) => {
+            let total_subs = all_subscriptions.len();
+            let subscriptions = if let Some(subs_limit) = limits.subscriptions {
+                log::info!(
                     "{:>10}: Limiting to only {} subscriptions",
                     gatherer_name,
-                    limits.subscriptions
+                    subs_limit
                 );
-                subscriptions
-                    .into_iter()
-                    .take(limits.subscriptions)
-                    .collect()
-            };
-            // If any usernames are provided treat them as a filter for the gatherer
-            if !user_names.is_empty() {
-                subscriptions = subscriptions
+                all_subscriptions.into_iter().take(subs_limit).collect()
+            } else if !user_names.is_empty() {
+                log::info!(
+                    "{:>10}: Omitting all but {} subscriptions",
+                    gatherer_name,
+                    user_names.len()
+                );
+                all_subscriptions
                     .into_iter()
                     .filter(|sub| user_names.contains(&sub.name.username))
-                    .collect();
+                    .collect()
+            } else if !ignored_user_names.is_empty() {
+                log::info!(
+                    "{:>10}: Removing {} ignored users from the list",
+                    gatherer_name,
+                    ignored_user_names.len()
+                );
+                all_subscriptions
+                    .into_iter()
+                    .filter(|sub| !ignored_user_names.contains(&sub.name.username))
+                    .collect()
+            } else {
+                all_subscriptions
+            };
+            if subscriptions.len() == total_subs {
+                println!(
+                    "{gatherer_name}: Found {} subscriptions",
+                    subscriptions.len(),
+                );
+            } else {
+                println!(
+                    "{gatherer_name}: Found {} subscriptions (Filtered from {})",
+                    subscriptions.len(),
+                    total_subs
+                );
             }
             // Start building output directory for our gatherer
             let base_path: PathBuf = base_path.into();

@@ -15,3 +15,5 @@ Cargo.lock
 **/examples/
 # default directory to save files
 downloads/
+
+.idea/

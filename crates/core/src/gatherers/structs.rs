@@ -9,8 +9,8 @@ use chrono::Utc;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RunLimits {
-    pub media: usize,
-    pub subscriptions: usize,
+    pub media: Option<usize>,
+    pub subscriptions: Option<usize>,
 }
 
 pub struct GathererInfo {
@@ -118,7 +118,15 @@ pub struct Story {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct DateTime(Option<chrono::DateTime<Utc>>);
+pub struct Transaction {
+    pub total_amount: f64,
+    pub user_name: String,
+    pub date: DateTime,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DateTime(pub Option<chrono::DateTime<Utc>>);
 
 impl From<chrono::DateTime<Utc>> for DateTime {
     fn from(f: chrono::DateTime<Utc>) -> Self {
@@ -134,6 +142,7 @@ impl std::fmt::Display for DateTime {
         }
     }
 }
+
 
 #[derive(Debug, Clone, Default)]
 pub struct SubscriptionCost(pub Option<f64>);

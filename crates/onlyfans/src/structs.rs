@@ -47,7 +47,6 @@ pub struct Subscription {
     pub can_add_subscriber: bool,
     #[serde(rename = "subscribePrice")]
     pub subscribe_price: f64,
-    pub vat: Vat,
     // #[serde(rename = "subscriptionBundles")]
     // pub subscription_bundles: Option<Vec<Option<serde_json::Value>>>,
     #[serde(rename = "isPaywallRestriction")]
@@ -364,6 +363,65 @@ pub struct Me {
     pub is_delete_initiated: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Message {
+    #[serde(rename = "responseType")]
+    pub response_type: String,
+    pub text: String,
+    #[serde(rename = "lockedText")]
+    pub locked_text: bool,
+    #[serde(rename = "isFree")]
+    pub is_free: bool,
+    pub price: f64,
+    #[serde(rename = "isMediaReady")]
+    pub is_media_ready: bool,
+    #[serde(rename = "mediaCount")]
+    pub media_count: i64,
+    pub media: Vec<Media>,
+    // pub previews: Vec<Option<serde_json::Value>>,
+    #[serde(rename = "isTip")]
+    pub is_tip: bool,
+    #[serde(rename = "isReportedByMe")]
+    pub is_reported_by_me: bool,
+    #[serde(rename = "fromUser")]
+    pub from_user: FromUser,
+    #[serde(rename = "isFromQueue")]
+    pub is_from_queue: bool,
+    pub id: i64,
+    #[serde(rename = "isOpened")]
+    pub is_opened: bool,
+    #[serde(rename = "isNew")]
+    pub is_new: bool,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    #[serde(rename = "changedAt")]
+    pub changed_at: Option<String>,
+    #[serde(rename = "cancelSeconds")]
+    pub cancel_seconds: i64,
+    #[serde(rename = "isLiked")]
+    pub is_liked: bool,
+    #[serde(rename = "canPurchase")]
+    pub can_purchase: bool,
+    #[serde(rename = "canPurchaseReason")]
+    pub can_purchase_reason: String,
+    #[serde(rename = "canReport")]
+    pub can_report: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FromUser {
+    pub id: i64,
+    #[serde(rename = "_view")]
+    pub view: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Preview {
+    pub width: i64,
+    pub height: i64,
+    pub size: i64,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct HasNewTicketReplies {
     pub open: bool,
@@ -512,16 +570,6 @@ pub struct SubscribedOnData {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Vat {
-    pub tips: i64,
-    pub subscribes: f64,
-    pub chat_messages: f64,
-    pub post: f64,
-    pub stream: f64,
-    pub credits: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct Post {
     #[serde(rename = "responseType")]
     pub response_type: String,
@@ -575,24 +623,27 @@ pub struct Post {
     pub has_url: bool,
     #[serde(rename = "commentsCount")]
     pub comments_count: i64,
-    // #[serde(rename = "mentionedUsers")]
-    // pub mentioned_users: Vec<Option<serde_json::Value>>,
-    // #[serde(rename = "linkedUsers")]
-    // pub linked_users: Vec<Option<serde_json::Value>>,
-    // #[serde(rename = "linkedPosts")]
-    // pub linked_posts: Vec<Option<serde_json::Value>>,
     #[serde(rename = "tipsAmount")]
-    pub tips_amount: String,
+    pub tips_amount: Option<String>,
     #[serde(rename = "tipsAmountRaw")]
-    pub tips_amount_raw: i64,
+    pub tips_amount_raw: Option<f64>,
     pub media: Vec<Media>,
     #[serde(rename = "canViewMedia")]
     pub can_view_media: bool,
-    pub preview: Vec<String>,
     #[serde(rename = "votingType")]
     pub voting_type: Option<i64>,
     #[serde(rename = "canVote")]
     pub can_vote: Option<bool>,
+    #[serde(rename = "fundRaising")]
+    pub fund_raising: Option<FundRaising>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FundRaising {
+    pub target: f64,
+    #[serde(rename = "targetProgress")]
+    pub target_progress: f64,
+    pub presets: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -608,37 +659,45 @@ pub struct Media {
     #[serde(rename = "type")]
     pub media_type: String,
     #[serde(rename = "convertedToVideo")]
-    pub converted_to_video: bool,
+    pub converted_to_video: Option<bool>,
     #[serde(rename = "canView")]
     pub can_view: bool,
     #[serde(rename = "hasError")]
     pub has_error: bool,
     #[serde(rename = "createdAt")]
-    pub created_at: String,
-    pub info: Info,
-    pub source: Source,
+    pub created_at: Option<String>,
+    pub info: Option<Info>,
+    pub source: Option<Source>,
     #[serde(rename = "squarePreview")]
-    pub square_preview: String,
-    pub full: String,
-    pub preview: String,
-    pub thumb: String,
-    pub files: Files,
+    pub square_preview: Option<String>,
+    pub full: Option<String>,
+    pub preview: Option<String>,
+    pub thumb: Option<String>,
+    pub files: Option<Files>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Files {
-    pub preview: FilesPreview,
+    pub preview: Option<FileSource>,
+    pub source: Option<FileSource>,
+    pub thumb: Option<FileSource>,
+    #[serde(rename = "squarePreview")]
+    pub square_preview: Option<FileSource>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct FilesPreview {
-    pub url: String,
+pub struct FileSource {
+    pub url: Option<String>,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
+    pub size: Option<i64>,
+    pub duration: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Info {
-    pub source: Source,
-    pub preview: InfoPreview,
+    pub source: Option<Source>,
+    pub preview: Option<InfoPreview>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -650,9 +709,72 @@ pub struct InfoPreview {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Source {
-    pub source: String,
-    pub width: i64,
-    pub height: i64,
-    pub size: i64,
-    pub duration: i64,
+    pub source: Option<String>,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
+    pub size: Option<i64>,
+    pub duration: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Story {
+    pub id: i64,
+    #[serde(rename = "userId")]
+    pub user_id: i64,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "expiredAt")]
+    pub expired_at: String,
+    #[serde(rename = "isReady")]
+    pub is_ready: bool,
+    #[serde(rename = "viewersCount")]
+    pub viewers_count: i64,
+    #[serde(rename = "canLike")]
+    pub can_like: bool,
+    #[serde(rename = "mediaCount")]
+    pub media_count: i64,
+    #[serde(rename = "isWatched")]
+    pub is_watched: bool,
+    #[serde(rename = "isLiked")]
+    pub is_liked: bool,
+    #[serde(rename = "canDelete")]
+    pub can_delete: bool,
+    #[serde(rename = "isHighlightCover")]
+    pub is_highlight_cover: bool,
+    #[serde(rename = "isLastInHighlight")]
+    pub is_last_in_highlight: bool,
+    pub media: Vec<Media>,
+    pub answered: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Transaction {
+    #[serde(rename = "vatName")]
+    pub vat_name: Option<String>,
+    #[serde(rename = "vatPercentage")]
+    pub vat_percentage: Option<f64>,
+    pub amount: f64,
+    #[serde(rename = "vatAmount")]
+    pub vat_amount: Option<f64>,
+    pub net: Option<i64>,
+    pub fee: Option<i64>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    pub currency: String,
+    pub description: String,
+    pub status: String,
+    pub user: Option<User>,
+    pub source: Option<String>,
+    pub id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct User {
+    pub view: String,
+    pub id: i64,
+    pub name: String,
+    pub username: String,
+    pub avatar: Option<String>,
+    #[serde(rename = "avatarThumbs")]
+    pub avatar_thumbs: Option<AvatarThumbs>,
 }

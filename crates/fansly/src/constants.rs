@@ -9,7 +9,7 @@ pub(crate) const TIMELINE_URL: &str = "/api/v1/timeline";
 pub(crate) const MEDIA_URL: &str = "/api/v1/account/media";
 pub(crate) const MEDIA_BUNDLE_URL: &str = "/api/v1/account/media/bundle";
 pub(crate) const WALL_URL: &str = "/api/v1/wall/";
-pub(crate) const MESSAGE_GROUPS_URL: &str = "/api/v1/group";
+pub(crate) const MESSAGE_GROUPS_URL: &str = "/api/v1/group?limit=200&offset=0";
 pub(crate) const TRASACTION_URL: &str = "/api/v1/message";
 pub(crate) const WALLET_TRASACTION_URL: &str = "/api/v1/message";
 pub(crate) const GROUP_MESSAGES_URL: &str = "/api/v1/message";

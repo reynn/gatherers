@@ -7,7 +7,8 @@ use async_trait::async_trait;
 
 //
 #[async_trait]
-pub trait BatchDownloader: Send + Sync {
+pub trait BatchDownloader: Send + Sync + std::fmt::Display {
+    fn name(&self) -> String;
     // Add a single item to the downloader queue
     async fn add_item_to_queue(&self, item: super::Downloadable) -> Result<()>;
     // Process a single item from the queue

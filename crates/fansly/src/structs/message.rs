@@ -4,23 +4,24 @@ use serde::{Deserialize, Serialize};
 pub struct MessageGroup {
     pub id: String,
     #[serde(rename = "type")]
-    pub message_group_type: i64,
+    pub group_type: i64,
     #[serde(rename = "groupFlags")]
     pub group_flags: i64,
     #[serde(rename = "createdBy")]
     pub created_by: String,
-    pub users: Vec<MessageUser>,
-    pub recipients: Vec<String>,
+    pub users: Vec<User>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MessageUser {
+pub struct User {
     #[serde(rename = "groupId")]
     pub group_id: String,
     #[serde(rename = "userId")]
     pub user_id: String,
     #[serde(rename = "type")]
     pub user_type: i64,
+    #[serde(rename = "permissionFlags")]
+    pub permission_flags: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

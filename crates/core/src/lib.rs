@@ -14,3 +14,7 @@ pub mod tasks;
 mod tests;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
+pub mod prelude {
+    pub use serde::{Deserialize, Serialize};
+}

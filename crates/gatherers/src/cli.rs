@@ -1,4 +1,6 @@
+use crate::cli_tasks::cli_task_gatherers_like;
 use crate::{config::Config, get_available_gatherers};
+use gatherer_core::gatherers::Gatherer;
 use gatherer_core::Result;
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 use structopt::StructOpt;
@@ -13,6 +15,8 @@ pub struct Cli {
     pub content_types: Option<ContentTypes>,
     #[structopt(short, long)]
     pub target_folder: Option<PathBuf>,
+    #[structopt(short, long)]
+    pub log_file: Option<PathBuf>,
     #[structopt(subcommand)]
     pub action: CliAction,
 }
@@ -33,14 +37,16 @@ pub enum CliAction {
         user_names: Vec<String>,
         #[structopt(short = "C", long)]
         worker_count: Option<u8>,
-        #[structopt(short, long, default_value = "0")]
-        limit_subs: usize,
-        #[structopt(short = "L", long, default_value = "0")]
-        limit_media: usize,
+        #[structopt(short, long)]
+        limit_subs: Option<usize>,
+        #[structopt(short = "L", long)]
+        limit_media: Option<usize>,
+        #[structopt(short, long)]
+        ignored_user_names: Vec<String>,
     },
     Like {
         #[structopt(short, long)]
-        gatherers: Option<Vec<String>>,
+        gatherers: Vec<String>,
         #[structopt(short = "L", long)]
         like_all: Option<bool>,
         #[structopt(short, long)]
@@ -48,7 +54,7 @@ pub enum CliAction {
     },
     Unlike {
         #[structopt(short, long)]
-        gatherers: Option<Vec<String>>,
+        gatherers: Vec<String>,
         #[structopt(short = "L", long)]
         like_all: Option<bool>,
         #[structopt(short, long)]
@@ -56,7 +62,13 @@ pub enum CliAction {
     },
     List {
         #[structopt(short, long)]
-        gatherers: Option<Vec<String>>,
+        gatherers: Vec<String>,
+    },
+    Transactions {
+        #[structopt(short, long)]
+        gatherers: Vec<String>,
+        #[structopt(short, long)]
+        user_names: Vec<String>,
     },
 }
 
@@ -68,6 +80,7 @@ impl Default for CliAction {
             limit_subs: Default::default(),
             limit_media: Default::default(),
             user_names: Default::default(),
+            ignored_user_names: Default::default(),
         }
     }
 }
@@ -82,17 +95,19 @@ impl CliAction {
                 worker_count,
                 limit_subs,
                 limit_media,
+                ignored_user_names,
             } => {
                 match get_available_gatherers(&conf, &gatherers).await {
                     Ok(gatherers) => {
-                        crate::cli_tasks::cli_task_gatherers_run(
+                        crate::cli_tasks::cli_task_gatherers_start(
                             gatherers,
-                            conf,
+                            &conf,
                             // TODO: default should be system dependant maybe num_cpu crate?
-                            worker_count.unwrap_or(8),
+                            worker_count.unwrap_or(conf.workers),
                             user_names,
                             limit_media,
                             limit_subs,
+                            ignored_user_names,
                         )
                         .await?;
                         Ok(())
@@ -124,6 +139,24 @@ impl CliAction {
             CliAction::List { gatherers } => {
                 println!("Listing subscriptions [gatherers: {:?};]", gatherers);
                 Ok(())
+            }
+            CliAction::Transactions {
+                gatherers,
+                user_names,
+            } => {
+                println!(
+                    "Getting transaction information for gatherers {:?}",
+                    gatherers
+                );
+                match get_available_gatherers(&conf, &gatherers).await {
+                    Ok(gatherers) => Ok(crate::cli_tasks::cli_task_gatherers_transactions(
+                        gatherers, user_names,
+                    )
+                    .await?),
+                    Err(err) => {
+                        Err(format!("Failed to get configured gatherers. {:?}", err).into())
+                    }
+                }
             }
         }
     }

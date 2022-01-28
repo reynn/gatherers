@@ -7,12 +7,14 @@
 
 mod builder;
 mod constants;
-mod gatherers;
+mod gatherer;
 mod responses;
 mod structs;
 
+use crate::responses::MessagesResponse;
 use builder::OnlyFansBuilder;
 use cookie::Cookie;
+use gatherer_core::http::json;
 use gatherer_core::{
     gatherers::{Gatherer, GathererErrors},
     http::{self, Client, ClientConfig, Headers, Url},
@@ -20,6 +22,7 @@ use gatherer_core::{
 };
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
+use std::future::Future;
 use std::{
     collections::HashMap,
     str::FromStr,
@@ -95,7 +98,7 @@ fn generate_request_headers(
     h.insert("user-id".to_string(), config.auth_id.to_string());
 
     // Add the necessary signed headers
-    let (signed, epoch_time) = create_ofans_header_sign(path, &config.auth_id, dynamic_rule);
+    let (signed, epoch_time) = create_signed_headers(path, &config.auth_id, dynamic_rule);
     h.insert("sign".to_string(), signed);
     h.insert("time".to_string(), epoch_time);
 
@@ -104,9 +107,6 @@ fn generate_request_headers(
 
 /// Impl block for OnlyFans API calls
 impl OnlyFans {
-    async fn get_current_user(&self) -> Result<()> {
-        Ok(())
-    }
     async fn get_subscriptions(&self) -> Result<Vec<structs::Subscription>> {
         let mut subscriptions = Vec::new();
         let mut offset = 0;
@@ -161,7 +161,9 @@ impl OnlyFans {
                 let response: Result<responses::PostsResponse> = posts_response.as_json().await;
                 match response {
                     Ok(mut pinned_posts) => posts.append(&mut pinned_posts.list),
-                    Err(pinned_err) => log::error!("Failed to get pinned posts for {user_id}: {pinned_err}"),
+                    Err(pinned_err) => {
+                        log::error!("Failed to get pinned posts for {user_id}: {pinned_err}")
+                    }
                 }
             }
             Err(response_err) => return Err(response_err),
@@ -206,15 +208,162 @@ impl OnlyFans {
 
         Ok(posts)
     }
+
+    async fn get_user_messages(&self, user_id: &str) -> Result<Vec<structs::Message>> {
+        let mut messages = Vec::new();
+
+        let mut last_message_id: Option<i64> = None;
+
+        loop {
+            let endpoint = match last_message_id {
+                None => format!("/api2/v2/chats/{user_id}/messages?limit=10&offset=0&order=desc&skip_users=all"),
+                Some(message_id) => format!("/api2/v2/chats/{user_id}/messages?limit=10&offset=0&id={message_id}&order=desc&skip_users=all")
+            };
+
+            match self
+                .http_client
+                .get(
+                    &endpoint,
+                    Some(crate::generate_request_headers(
+                        &self.config,
+                        &endpoint,
+                        &self.dynamic_rule,
+                    )),
+                )
+                .await
+            {
+                Ok(success_response) => {
+                    let msg_success: Result<responses::MessagesResponse> =
+                        success_response.as_json().await;
+                    match msg_success {
+                        Ok(curr_messages) => {
+                            let authed_user_id = self.authed_user.id;
+                            if curr_messages.has_more {
+                                last_message_id = curr_messages
+                                    .list
+                                    .iter()
+                                    .last()
+                                    .map(|last_item| last_item.id);
+                            } else {
+                                break;
+                            }
+                            // filter out messages that have been sent by the authed user
+                            for curr_msg in curr_messages.list.into_iter() {
+                                if curr_msg.from_user.id != authed_user_id {
+                                    messages.push(curr_msg);
+                                }
+                            }
+                        }
+                        Err(as_json_err) => {
+                            log::debug!(
+                                "Failed to convert message response into JSON: {:?}",
+                                as_json_err
+                            );
+                            return Err(as_json_err);
+                        }
+                    }
+                }
+                Err(error_response) => {
+                    log::debug!(
+                        "Received a bad response while getting messages for {}. {:?}",
+                        user_id,
+                        error_response
+                    );
+                    return Err(error_response);
+                }
+            }
+        }
+
+        Ok(messages)
+    }
+
+    async fn get_user_stories(&self, user_id: &str) -> Result<Vec<structs::Story>> {
+        let endpoint = format!("/api2/v2/users/{user_id}/stories?unf=1");
+        match self
+            .http_client
+            .get(
+                &endpoint,
+                Some(crate::generate_request_headers(
+                    &self.config,
+                    &endpoint,
+                    &self.dynamic_rule,
+                )),
+            )
+            .await
+        {
+            Ok(success_resp) => {
+                let user_stories: Result<responses::StoriesResponse> = success_resp.as_json().await;
+                match user_stories {
+                    Ok(all_stories) => {
+                        Ok(all_stories)
+                    }
+                    Err(invalid_json_err) => {
+                        Err(format!("Got user stories for {user_id} but unable to convert to JSON. {invalid_json_err}").into())
+                    }
+                }
+            }
+            Err(err_resp) => {
+                Err(format!("Failed to get stories for user {user_id}. {err_resp}").into())
+            }
+        }
+    }
+
+    async fn get_transactions(&self) -> Result<Vec<structs::Transaction>> {
+        let mut transactions = Vec::new();
+        let mut has_more = true;
+        let mut marker: Option<i64> = None;
+
+        while has_more {
+            let endpoint = if let Some(marker) = marker {
+                format!("/api2/v2/payments/all/transactions?limit=10&marker={marker}&type=payment")
+            } else {
+                "/api2/v2/payments/all/transactions?limit=10&type=payment".into()
+            };
+
+            match self
+                .http_client
+                .get(
+                    &endpoint,
+                    Some(crate::generate_request_headers(
+                        &self.config,
+                        &endpoint,
+                        &self.dynamic_rule,
+                    )),
+                )
+                .await
+            {
+                Ok(success_resp) => {
+                    let available_transactions: Result<responses::TransactionsResponse> =
+                        success_resp.as_json().await;
+                    match available_transactions {
+                        Ok(mut available_transactions) => {
+                            has_more = available_transactions.has_more;
+                            marker = available_transactions.next_marker;
+                            transactions.append(&mut available_transactions.list)
+                        }
+                        Err(json_err) => {
+                            log::error!(
+                                "Response from {endpoint} did not return expected response. {:?}",
+                                json_err
+                            )
+                        }
+                    }
+                }
+                Err(transaction_err) => {}
+            }
+        }
+
+        Ok(transactions)
+    }
 }
 
-pub async fn get_dc_dynamic_rule(api_client: &'_ Client) -> Result<DynamicRule> {
+async fn get_dc_dynamic_rule(api_client: &'_ Client) -> Result<DynamicRule> {
     let url = Url::parse(constants::DC_DYNAMIC_RULE).unwrap();
     let resp = api_client.get(&url, None).await?;
     Ok(resp.as_json().await?)
 }
 
-fn create_ofans_header_sign(
+fn create_signed_headers(
     path: &'_ str,
     user_id: &'_ str,
     rule: &'_ DynamicRule,

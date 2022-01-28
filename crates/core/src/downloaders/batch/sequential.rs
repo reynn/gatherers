@@ -1,3 +1,4 @@
+use std::fmt::Formatter;
 use std::{sync::Arc, time::Duration};
 
 use crate::{
@@ -33,8 +34,18 @@ impl SequentialDownloader {
     }
 }
 
+impl std::fmt::Display for SequentialDownloader {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
 #[async_trait::async_trait]
 impl BatchDownloader for SequentialDownloader {
+    fn name(&self) -> String {
+        "sequential".into()
+    }
+
     async fn add_item_to_queue(&self, item: Downloadable) -> Result<()> {
         let item_name = String::from(&item.file_name);
         let mut item = item;
