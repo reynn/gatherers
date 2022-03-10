@@ -13,5 +13,7 @@ Cargo.lock
 *.log
 
 **/examples/
-# default directory to save files into
+# default directory to save files
 downloads/
+
+.idea/
