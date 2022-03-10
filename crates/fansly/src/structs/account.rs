@@ -44,7 +44,7 @@ pub struct Account {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FollowedAccount {
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub status: i64,
     #[serde(rename = "storyCount")]
     pub story_count: i64,
@@ -62,7 +62,7 @@ pub struct Avatar {
     pub avatar_type: i64,
     pub status: i64,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub mimetype: String,
     pub filename: String,
     pub width: i64,
@@ -103,7 +103,7 @@ pub struct PinnedPost {
     #[serde(rename = "postId")]
     pub post_id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub pos: Option<i64>,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
@@ -113,7 +113,7 @@ pub struct PinnedPost {
 pub struct SubscriptionTier {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub name: String,
     pub color: String,
     pub pos: i64,
@@ -156,7 +156,7 @@ pub struct Promo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TimelineStats {
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "imageCount")]
     pub image_count: i32,
     #[serde(rename = "videoCount")]
@@ -175,7 +175,7 @@ pub struct TimelineStats {
 pub struct Wall {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub name: String,
     pub description: Option<String>,
     pub metadata: String,

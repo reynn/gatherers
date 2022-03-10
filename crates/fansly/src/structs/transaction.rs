@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct Transaction {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "billingEmail")]
     pub billing_email: Option<String>,
     #[serde(rename = "walletId")]
@@ -37,7 +37,7 @@ pub struct WalletTransaction {
     #[serde(rename = "transactionId")]
     pub transaction_id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "correlationId")]
     pub correlation_id: String,
     #[serde(rename = "type")]

@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Subscription {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "subscriptionTierId")]
     pub subscription_tier_id: String,
     #[serde(rename = "subscriptionTierName")]
@@ -62,7 +61,7 @@ pub struct SubscriptionStats {
 pub struct SubscriptionPlan {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "subscriptionTierId")]
     pub subscription_tier_id: String,
     #[serde(rename = "billingCycle")]

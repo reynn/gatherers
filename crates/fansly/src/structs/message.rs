@@ -46,7 +46,7 @@ pub struct Message {
 pub struct Like {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "type")]
     pub like_type: i64,
 }

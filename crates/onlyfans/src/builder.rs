@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{constants, responses, structs, OnlyFans, OnlyFansConfig};
 use gatherer_core::{
     http::{Client, Cookie},
@@ -41,7 +39,7 @@ impl OnlyFansBuilder {
 
         init_headers.remove("user-id");
 
-        let init_success = async {
+        async {
             let init_response = http_client
                 .get(constants::INIT_URL, Some(init_headers))
                 .await;
@@ -73,7 +71,6 @@ impl OnlyFansBuilder {
             dynamic_rule,
             http_client: http_client.clone(),
             authed_user: curr_user,
-            cookie: cookie.into(),
         })
     }
 

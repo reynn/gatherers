@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::structs;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct FanslyResponse<T> {
@@ -23,20 +23,21 @@ pub type MediaResponse = FanslyResponse<Vec<crate::structs::Media>>;
 pub type MessageGroupsResponse = FanslyResponse<inner::MessageGroups>;
 // Response the consts::POSTS_URL endpoint
 pub type PostsResponse = FanslyResponse<inner::Posts>;
-// Response the consts::PURCHASED_URL endpoint
-pub type PurchasedContentResponse = FanslyResponse<inner::PurchasedContent>;
-// Response the consts::STATUS_URL endpoint
-pub type StatusResponse = FanslyResponse<inner::Status>;
 // Response the consts::SUBS_URL endpoint
 pub type SubscriptionResponse = FanslyResponse<inner::Subscriptions>;
 // Response the consts::TRANSACTIONS_URL endpoint
-pub type TransactionsResponse = FanslyResponse<inner::Transaction<structs::Transaction>>;
+// pub type TransactionsResponse = FanslyResponse<inner::Transaction<structs::Transaction>>;
+// Response the consts::PURCHASED_URL endpoint
+// pub type PurchasedContentResponse = FanslyResponse<inner::PurchasedContent>;
+// Response the consts::STATUS_URL endpoint
+// pub type StatusResponse = FanslyResponse<inner::Status>;
+
 // Response the consts::WALLET_TRANSACTIONS_URL endpoint
-pub type WalletTransactionsResponse = FanslyResponse<inner::Transaction<structs::WalletTransaction>>;
+pub type WalletTransactionsResponse =
+    FanslyResponse<inner::Transaction<structs::WalletTransaction>>;
 
 pub(crate) mod inner {
     use serde::{Deserialize, Serialize};
-    use crate::structs;
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Subscriptions {

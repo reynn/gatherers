@@ -5,8 +5,6 @@ pub use surf::http::{
     Method,
 };
 
-use crate::http::Response;
-
 #[derive(Debug, Clone)]
 pub struct Request(surf::Request);
 

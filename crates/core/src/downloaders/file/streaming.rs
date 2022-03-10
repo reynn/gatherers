@@ -1,13 +1,11 @@
 use crate::Result;
 use surf::http::headers::HeaderValue;
 
-pub struct StreamingFileDownloader {
-    chunk_size: usize,
-}
+pub struct StreamingFileDownloader {}
 
 #[async_trait::async_trait]
 impl super::FileDownloader for StreamingFileDownloader {
-    async fn download(&self, url: &'_ str, output_path: std::path::PathBuf) -> Result<u64> {
+    async fn download(&self, _url: &'_ str, _output_path: std::path::PathBuf) -> Result<u64> {
         todo!()
     }
 }
@@ -22,6 +20,7 @@ struct PartialRangeIter {
 }
 
 impl PartialRangeIter {
+    #[allow(unused)]
     pub fn new(start: u64, end: u64, buffer_size: u32) -> Result<Self> {
         if buffer_size == 0 {
             return Err("invalid buffer_size, give a value greater than zero.".into());

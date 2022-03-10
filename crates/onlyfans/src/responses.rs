@@ -8,6 +8,8 @@ pub(super) type PostsResponse = ListResponse<Post>;
 pub(super) type MessagesResponse = ListResponse<Message>;
 pub(super) type StoriesResponse = Vec<Story>;
 pub(super) type TransactionsResponse = Transactions;
+pub(super) type PurchasedItemsResponse = ListResponse<PurchasedItem>;
+pub(super) type ListOfUsersResponse = std::collections::HashMap<String, ListUser>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListResponse<T> {

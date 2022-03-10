@@ -1,24 +1,25 @@
 [package]
 edition = "2021"
-name    = "gatherers"
+name = "gatherers"
 version = "0.1.0"
 
 [dependencies]
-async-channel     = "1.6"
-async-task        = "4.0"
-fern              = "0.6"
-flume             = "0.10"
-futures           = "0.3"
-gatherer-core     = { path = "../core" }
-gatherer-fansly   = { path = "../fansly" }
+async-channel = "1.6"
+async-task = "4.0"
+fern = "0.6"
+flume = "0.10"
+futures = "0.3"
+gatherer-core = { path = "../core" }
+gatherer-fansly = { path = "../fansly" }
 gatherer-onlyfans = { path = "../onlyfans" }
-log               = "0.4"
-serde             = { version = "1.0", features = ["derive"] }
-smol              = "1.2"
-structopt         = "0.3"
-toml              = "0.5"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+smol = "1.2"
+structopt = "0.3"
+toml = "0.5"
 
 [features]
-default  = ["fansly", "onlyfans"]
-fansly   = []
+default = ["fansly", "onlyfans"]
+fansly = []
 onlyfans = []

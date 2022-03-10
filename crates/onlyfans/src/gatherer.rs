@@ -1,17 +1,14 @@
-use crate::structs::User;
-use gatherer_core::gatherers::{structs::DateTime, Transaction};
 use gatherer_core::{
-    gatherers::{Gatherer, Media, Subscription, SubscriptionCost, SubscriptionName},
+    gatherers::{structs::DateTime, Gatherer, Media, Subscription, Transaction},
     Result,
 };
-use std::future::Future;
-// use chrono::{Local, NaiveDateTime, TimeZone, Utc};
+use std::collections::HashMap;
 use url::*;
 
 #[async_trait::async_trait]
 impl Gatherer for crate::OnlyFans {
     async fn gather_subscriptions(&self) -> Result<Vec<Subscription>> {
-        match self.get_subscriptions().await {
+        match self.get_subscriptions(Some("active")).await {
             Ok(subs) => Ok(subs.into_iter().map(|of_sub| of_sub.into()).collect()),
             Err(subs_err) => Err(subs_err),
         }
@@ -28,21 +25,20 @@ impl Gatherer for crate::OnlyFans {
 
                 for post in user_posts {
                     for post_media in post.media {
-                        match post_media.try_into() {
-                            Ok(valid_media) => {
+                        match to_gatherer_media(&post_media, &sub.name.username) {
+                            Some(valid_media) => {
                                 let mut valid_media: gatherer_core::gatherers::Media = valid_media;
                                 // If the post has a cost and it has been opened than we have paid for it
                                 valid_media.paid = if let Some(price) = post.price {
-                                    post.is_opened
+                                    post.is_opened && (price > 0.)
                                 } else {
                                     false
                                 };
                                 media.push(valid_media)
                             }
-                            Err(invalid_media) => log::debug!(
-                                "Failed to get media from user post. {:?}",
-                                invalid_media
-                            ),
+                            None => {
+                                log::debug!("Failed to get media from user post. {}", post_media.id)
+                            }
                         }
                     }
                 }
@@ -63,25 +59,28 @@ impl Gatherer for crate::OnlyFans {
                 let mut media = Vec::new();
                 for msg in user_messages {
                     for msg_media in msg.media {
-                        match msg_media.try_into() {
-                            Ok(valid_media) => {
+                        match to_gatherer_media(&msg_media, &sub.name.username) {
+                            Some(valid_media) => {
                                 let mut valid_media: gatherer_core::gatherers::Media = valid_media;
                                 // if the post is not free, and you cannot purchase it but it is opened than you have paid for this content
-                                valid_media.paid =
-                                    !msg.is_free && !msg.can_purchase && msg.is_opened;
+                                valid_media.paid = !msg.is_free
+                                    && !msg.can_purchase.unwrap_or_default()
+                                    && msg.is_opened;
                                 media.push(valid_media)
                             }
-                            Err(invalid_media) => {
-                                log::debug!("Failed to get media from msg. {:?}", invalid_media)
+                            None => {
+                                log::debug!("Failed to get media from msg. {}", msg.id)
                             }
                         }
                     }
                 }
                 Ok(media)
             }
-            Err(messages_err) => {
-                Err(format!("Failed to get messages for user: {}", sub.name.username).into())
-            }
+            Err(messages_err) => Err(format!(
+                "Failed to get messages for user: {}. {:?}",
+                sub.name.username, messages_err
+            )
+            .into()),
         }
     }
 
@@ -91,12 +90,11 @@ impl Gatherer for crate::OnlyFans {
                 let mut media = vec![];
                 for story in user_stories {
                     for story_media in story.media {
-                        match story_media.try_into() {
-                            Ok(valid_media) => media.push(valid_media),
-                            Err(invalid_media) => log::debug!(
-                                "Failed to get media from user story. {:?}",
-                                invalid_media
-                            ),
+                        match to_gatherer_media(&story_media, &sub.name.username) {
+                            Some(valid_media) => media.push(valid_media),
+                            None => {
+                                log::debug!("Failed to get media from user story. {}", story.id)
+                            }
                         }
                     }
                 }
@@ -107,29 +105,133 @@ impl Gatherer for crate::OnlyFans {
     }
 
     async fn gather_paid_content(&self) -> Result<Vec<Media>> {
-        log::error!("Not yet implemented for {}", self.name());
-        Ok(Vec::new())
+        let mut known_users: HashMap<i64, String> = HashMap::new();
+        match self.get_paid_content().await {
+            Ok(paid_content) => {
+                let mut results = Vec::new();
+                for item in paid_content.into_iter() {
+                    let user_id: i64 = match &item.response_type[..] {
+                        "message" => {
+                            if let Some(from_user) = &item.from_user {
+                                from_user.id
+                            } else {
+                                0
+                            }
+                        }
+                        "post" => {
+                            if let Some(author) = &item.author {
+                                author.id
+                            } else {
+                                0
+                            }
+                        }
+                        _ => 0,
+                    };
+                    let user_name = if let Some(user_name) = known_users.get(&user_id) {
+                        String::from(user_name)
+                    } else {
+                        match self.get_users_by_id(&[user_id]).await {
+                            Ok(users) => {
+                                if !users.is_empty() {
+                                    known_users.insert(user_id, String::from(&users[0].username));
+                                    String::from(&users[0].username)
+                                } else {
+                                    String::from("unknown user")
+                                }
+                            }
+                            Err(user_err) => {
+                                log::debug!(
+                                    "Error getting user by id [{}]. {:?}",
+                                    user_id,
+                                    user_err
+                                );
+                                String::from("unknown user")
+                            }
+                        }
+                    };
+                    for media in item.media.into_iter() {
+                        if let Some(mut purchased_media) = to_gatherer_media(&media, &user_name) {
+                            purchased_media.paid = true;
+                            results.push(purchased_media);
+                        }
+                    }
+                }
+                // let mut results = paid_content
+                //     .into_iter()
+                //     .flat_map(|item| {
+                //         let user_id: i64 = match &item.response_type[..] {
+                //             "message" => {
+                //                 if let Some(from_user) = item.from_user {
+                //                     from_user.id
+                //                 } else {
+                //                     0
+                //                 }
+                //             }
+                //             "post" => {
+                //                 if let Some(author) = item.author {
+                //                     0
+                //                 } else {
+                //                     0
+                //                 }
+                //             }
+                //             _ => 0,
+                //         };
+                //         let user_name = if let Some(user_name) = users.get(&user_id) {
+                //             user_name
+                //         } else {
+                //             match self.get_users_by_id(&[user_id]).await {
+                //                 Ok(users) => {}
+                //                 Err(user_err) => {}
+                //             }
+                //         };
+                //         item.media
+                //             .into_iter()
+                //             .filter_map(|purchased_media| {
+                //                 to_gatherer_media(&purchased_media, user_name)
+                //             })
+                //             .collect::<Vec<_>>()
+                //     })
+                //     .collect::<Vec<_>>();
+                // set all of these results to ensure paid flag is set properly
+                Ok(results)
+            }
+            Err(paid_content_err) => Err(paid_content_err),
+        }
     }
 
-    async fn gather_transaction_details(&self, user_names: &[String]) -> Result<Vec<Transaction>> {
+    async fn gather_transaction_details(&self, _: &[String]) -> Result<Vec<Transaction>> {
         match self.get_transactions().await {
-            Ok(transactions) => Ok(transactions
-                .into_iter()
-                .map(|of_transaction| {
-                    let date_time =
-                        chrono::DateTime::parse_from_rfc3339(&of_transaction.created_at).unwrap();
-                    Transaction {
-                        total_amount: of_transaction.amount
-                            + of_transaction.vat_amount.unwrap_or_default(),
-                        user_name: match of_transaction.user {
-                            None => "unknown".into(),
-                            Some(transaction_user) => transaction_user.username,
-                        },
-                        date: DateTime(Some(date_time.into())),
-                        description: Some(of_transaction.description),
-                    }
-                })
-                .collect()),
+            Ok(transactions) => {
+                Ok(transactions
+                    .into_iter()
+                    .filter_map(|of_transaction| {
+                        let date = if let Some(created_at) = &of_transaction.created_at {
+                            DateTime(Some(
+                                chrono::DateTime::parse_from_rfc3339(created_at)
+                                    .unwrap()
+                                    .into(),
+                            ))
+                        } else {
+                            DateTime(None)
+                        };
+                        if &of_transaction.status.unwrap_or_default() == "done" {
+                            Some(Transaction {
+                                // Taxes and requested amount are separate, combine them for our total
+                                total_amount: of_transaction.amount
+                                    + of_transaction.vat_amount.unwrap_or_default(),
+                                user_name: match of_transaction.user {
+                                    None => "unknown".into(),
+                                    Some(transaction_user) => transaction_user.username,
+                                },
+                                date,
+                                description: Some(of_transaction.description),
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect())
+            }
             Err(transaction_err) => Err(transaction_err),
         }
     }
@@ -143,64 +245,64 @@ impl Gatherer for crate::OnlyFans {
     }
 }
 
-impl TryFrom<crate::structs::Media> for Media {
-    type Error = Box<dyn std::error::Error>;
-
-    fn try_from(of_media: crate::structs::Media) -> std::result::Result<Self, Self::Error> {
-        let of_media = of_media;
-        let mime_type = match of_media.media_type.as_str() {
-            "photo" => "image/jpeg",
-            "video" | "gif" => "video/mp4",
-            _ => "unknown",
-        };
-
-        let mut possible_media_link: &Option<String> = &of_media.full;
-        if possible_media_link.is_none() {
-            if let Some(media_info) = &of_media.info {
-                if let Some(info_source) = &media_info.source {
-                    possible_media_link = &info_source.source;
-                }
+pub(crate) fn to_gatherer_media(
+    of_media: &'_ crate::structs::Media,
+    of_sub_name: &'_ str,
+) -> Option<Media> {
+    let mime_type = match of_media.media_type.as_str() {
+        "photo" => "image/jpeg",
+        "video" | "gif" => "video/mp4",
+        _ => "unknown",
+    };
+    let mut possible_media_link: &Option<String> = &of_media.full;
+    if possible_media_link.is_none() {
+        if let Some(media_info) = &of_media.info {
+            if let Some(info_source) = &media_info.source {
+                possible_media_link = &info_source.source;
             }
-        };
-        if possible_media_link.is_none() {
-            if let Some(media_source) = &of_media.source {
-                possible_media_link = &media_source.source;
+        }
+    };
+    if possible_media_link.is_none() {
+        if let Some(media_source) = &of_media.source {
+            possible_media_link = &media_source.source;
+        }
+    };
+    if possible_media_link.is_none() {
+        if let Some(files) = &of_media.files {
+            if let Some(file_source) = &files.source {
+                possible_media_link = &file_source.url;
             }
-        };
-        if possible_media_link.is_none() {
-            if let Some(files) = &of_media.files {
-                if let Some(file_source) = &files.source {
-                    possible_media_link = &file_source.url;
-                }
-            }
-        };
-        if possible_media_link.is_none() {
-            return Err(format!(
-                "Unable to determine the file source for OF Media {:?}",
-                &of_media
-            )
-            .into());
-        };
+        }
+    };
+    if possible_media_link.is_none() {
+        log::debug!(
+            "Unable to determine the file source for OF Media {:?}",
+            &of_media
+        );
+        return None;
+    };
 
-        let url = possible_media_link.clone().unwrap();
+    let url = possible_media_link.clone().unwrap();
 
-        let file_name: String = {
-            if let Ok(url) = Url::parse(&url) {
-                if let Some(segments) = url.path_segments() {
-                    segments.into_iter().last().unwrap_or_default().to_string()
-                } else {
-                    return Err(format!("No path segments available in URL {}", url).into());
-                }
+    let file_name: String = {
+        if let Ok(url) = Url::parse(&url) {
+            if let Some(segments) = url.path_segments() {
+                segments.into_iter().last().unwrap_or_default().to_string()
             } else {
-                return Err(format!("Unable to determine file name from URL: {:?}", &url).into());
+                log::debug!("No path segments available in URL {}", url);
+                return None;
             }
-        };
+        } else {
+            log::debug!("Unable to determine file name from URL: {:?}", &url);
+            return None;
+        }
+    };
 
-        Ok(Self {
-            file_name,
-            paid: false,
-            mime_type: mime_type.to_string(),
-            url,
-        })
-    }
+    Some(Media {
+        file_name,
+        paid: false,
+        mime_type: mime_type.to_string(),
+        url,
+        user_name: of_sub_name.to_string(),
+    })
 }

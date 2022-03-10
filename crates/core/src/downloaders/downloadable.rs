@@ -1,26 +1,9 @@
 use super::InMemoryFileDownloader;
-use crate::{downloaders::DownloaderErrors, gatherers::Media, Result};
-use async_fs::File;
-use futures_lite::{
-    io::{copy, AsyncWriteExt, BufReader},
-    stream, StreamExt,
-};
-use std::{
-    fmt::Display,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
-use surf::{
-    http::{
-        headers::{HeaderValue, CONTENT_LENGTH, CONTENT_RANGE},
-        Method,
-    },
-    Request, StatusCode, Url,
-};
+use crate::{gatherers::Media, Result};
+use std::{fmt::Display, path::PathBuf};
 
-const DEFAULT_BUFFER_SIZE: u32 = 1024; // ~1 mb
-const DEFAULT_MIN_SIZE_TO_CHUNK: u64 = (100 * 1024) * 1024; // roughly 100 mb
-const TEST_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36";
+// const DEFAULT_BUFFER_SIZE: u32 = 1024; // ~1 mb
+// const DEFAULT_MIN_SIZE_TO_CHUNK: u64 = (100 * 1024) * 1024; // roughly 100 mb
 
 #[derive(Debug)]
 pub struct Downloadable {
@@ -49,7 +32,7 @@ impl Downloadable {
             .await
     }
 
-    fn get_file_path(&self) -> PathBuf {
+    pub fn get_file_path(&self) -> PathBuf {
         self.base_path.join(&self.file_name)
     }
 

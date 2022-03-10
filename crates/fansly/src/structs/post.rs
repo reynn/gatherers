@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct Post {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub content: String,
     #[serde(rename = "inReplyTo")]
     pub in_reply_to: Option<i64>,
@@ -34,7 +34,7 @@ pub struct Post {
 pub struct AccountMedia {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     // #[serde(rename = "previewId")]
     // pub preview_id: Option<serde_json::Value>,
     #[serde(rename = "permissionFlags")]
@@ -74,7 +74,7 @@ pub struct Avatar {
     pub avatar_type: i64,
     pub status: i64,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub mimetype: String,
     pub filename: String,
     pub width: i64,
@@ -164,7 +164,7 @@ pub struct PinnedPost {
     #[serde(rename = "postId")]
     pub post_id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub pos: i64,
     #[serde(rename = "createdAt")]
     pub created_at: i64,
@@ -174,7 +174,7 @@ pub struct PinnedPost {
 pub struct Subscription {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "subscriptionTierId")]
     pub subscription_tier_id: String,
     #[serde(rename = "subscriptionTierName")]
@@ -222,7 +222,7 @@ pub struct Subscription {
 pub struct SubscriptionTier {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub name: String,
     pub color: String,
     pub pos: i64,
@@ -267,7 +267,7 @@ pub struct Promo {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TimelineStats {
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "imageCount")]
     pub image_count: i64,
     #[serde(rename = "videoCount")]
@@ -286,7 +286,7 @@ pub struct TimelineStats {
 pub struct Wall {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub name: String,
     pub description: String,
     pub metadata: String,
@@ -305,7 +305,7 @@ pub struct Mention {
 pub struct Attachment {
     // pub pos: String,
     #[serde(rename = "contentType")]
-    pub content_type: i64,
+    pub content_type: Option<i64>,
     #[serde(rename = "contentId")]
-    pub content_id: String,
+    pub content_id: Option<String>,
 }

@@ -16,11 +16,3 @@ pub trait BatchDownloader: Send + Sync + std::fmt::Display {
     // Loop through download queue until closed or empty
     async fn process_all_items(&self) -> Result<super::DownloaderStats>;
 }
-
-// TODO: not entirely sure this does what is expected.
-// theory is Downloader::default() should reurn a  sequential downloader in its default state
-impl dyn BatchDownloader {
-    fn default() -> SequentialDownloader {
-        SequentialDownloader::default()
-    }
-}

@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, path::Path};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Media {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "previewId")]
     pub preview_id: Option<String>,
     pub price: Option<i64>,
@@ -32,7 +31,7 @@ pub struct Media {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PurchasedMedia {
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "accountMediaId")]
     pub account_media_id: String,
     pub r#type: u8,
@@ -42,34 +41,6 @@ pub struct PurchasedMedia {
     pub bundle_id: String,
 }
 
-impl TryFrom<Media> for gatherer_core::gatherers::Media {
-    type Error = String;
-
-    fn try_from(media: Media) -> Result<Self, Self::Error> {
-        if let Some(details) = media.details {
-            if details.locations.is_empty() {
-                return Err(format!("Content not available: {:?}", details));
-            }
-            let original_file_path = Path::new(&details.file_name);
-            // debug!("The original upload file name was {:?}", original_file_path);
-            let mut file_name = media.id;
-            file_name += &original_file_path
-                .extension()
-                .map(|ext| format!(".{}", &ext.to_str().unwrap_or_default()))
-                .unwrap_or_default();
-            // debug!("Media ID filename is {}", file_name);
-            Ok(Self {
-                file_name,
-                url: details.locations[0].location.to_string(),
-                mime_type: details.mimetype,
-                paid: media.purchased,
-            })
-        } else {
-            Err(format!("Content not available: {:?}", media))
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaDetails {
     pub id: String,
@@ -77,7 +48,7 @@ pub struct MediaDetails {
     pub media_type: i64,
     pub status: i64,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     pub mimetype: String,
     #[serde(rename = "filename")]
     pub file_name: String,

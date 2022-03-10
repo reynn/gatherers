@@ -1,15 +1,12 @@
-use crate::responses::AccountsResponse;
 use crate::{
     structs::{self, MessageGroup},
     Fansly,
 };
-use chrono::NaiveDateTime;
-use gatherer_core::gatherers::{DateTime, Transaction};
 use gatherer_core::{
-    gatherers::{self, Gatherer, GathererErrors, Media, Subscription},
+    gatherers::{Gatherer, Media, Subscription, Transaction},
     Result,
 };
-use std::{convert::TryInto, time::Duration};
+use std::path::Path;
 
 #[async_trait::async_trait]
 impl Gatherer for Fansly {
@@ -18,18 +15,25 @@ impl Gatherer for Fansly {
     }
 
     async fn gather_media_from_bundles(&self, sub: &'_ Subscription) -> Result<Vec<Media>> {
-        let bundle_media = Vec::new();
+        let mut bundle_media = Vec::new();
 
         let account = self.get_user_accounts_by_ids(&[sub.id.clone()]).await?;
         let account = account.response.get(0).unwrap();
 
-        if let Some(avatar) = &account.avatar {
+        if let Some(avatar) = account.avatar.clone() {
             log::debug!("Adding avatar for {}", sub.name);
+            if let Some(media) = crate::fansly_media_to_gatherers_media(avatar, &sub.name.username)
+            {
+                bundle_media.push(media)
+            }
         };
 
-        if let Some(banner) = &account.banner {
+        if let Some(banner) = account.banner.clone() {
             log::debug!("Adding banner for {}", sub.name);
-            let details = banner.details.as_ref();
+            if let Some(media) = crate::fansly_media_to_gatherers_media(banner, &sub.name.username)
+            {
+                bundle_media.push(media)
+            }
         };
 
         Ok(bundle_media)
@@ -50,7 +54,7 @@ impl Gatherer for Fansly {
                         p.iter().flat_map(|post| {
                             post.attachments
                                 .iter()
-                                .map(|a| a.content_id.to_string())
+                                .map(|a| a.content_id.clone().unwrap_or_default())
                                 .collect::<Vec<_>>()
                         })
                     })
@@ -110,7 +114,7 @@ impl Gatherer for Fansly {
         log::debug!("all_media: {:?}", all_media);
         Ok(all_media
             .into_iter()
-            .filter_map(super::fansly_media_to_gatherers_media)
+            .filter_map(|media| super::fansly_media_to_gatherers_media(media, &sub.name.username))
             .collect())
     }
 
@@ -148,7 +152,7 @@ impl Gatherer for Fansly {
                                 .flat_map(|m| {
                                     m.attachments
                                         .iter()
-                                        .map(|a| a.content_id.to_string())
+                                        .map(|a| a.content_id.clone().unwrap_or_default())
                                         .collect::<Vec<_>>()
                                 })
                                 .collect();
@@ -180,7 +184,9 @@ impl Gatherer for Fansly {
                         // let media: Vec<Media> = ;
                         Ok(media
                             .into_iter()
-                            .filter_map(super::fansly_media_to_gatherers_media)
+                            .filter_map(|media| {
+                                super::fansly_media_to_gatherers_media(media, &sub.name.username)
+                            })
                             .collect())
                     }
                     Err(media_err) => Err(format!(
@@ -205,19 +211,22 @@ impl Gatherer for Fansly {
     async fn gather_media_from_stories(&self, sub: &'_ Subscription) -> Result<Vec<Media>> {
         match self.get_account_stories(&sub.id).await {
             Ok(user_stories) => {
-                let story_content_ids: Vec<String> =
-                    user_stories.into_iter().map(|s| s.content_id).collect();
+                let story_content_ids: Vec<String> = user_stories
+                    .into_iter()
+                    .map(|s| s.content_id.unwrap_or_default())
+                    .collect();
                 match self.get_media_by_ids(&story_content_ids).await {
                     Ok(media) => Ok(media
                         .into_iter()
-                        .filter_map(|fansly_media| match fansly_media.try_into() {
-                            Ok(link) => Some(link),
-                            Err(e) => None,
+                        .filter_map(|fansly_media| {
+                            match to_gatherer_media(fansly_media, &sub.name.username) {
+                                Ok(link) => Some(link),
+                                Err(_) => None,
+                            }
                         })
                         .collect()),
                     Err(media_err) => Err(media_err),
                 }
-                // Ok(Vec::new())
             }
             Err(stories_err) => Err(stories_err),
         }
@@ -232,7 +241,7 @@ impl Gatherer for Fansly {
         let media = self.get_media_by_ids(&media_ids).await?;
         Ok(media
             .into_iter()
-            .filter_map(super::fansly_media_to_gatherers_media)
+            .filter_map(|media| super::fansly_media_to_gatherers_media(media, ""))
             .collect())
     }
 
@@ -243,20 +252,20 @@ impl Gatherer for Fansly {
                     .iter()
                     .filter_map(|t| t.receiver_id.clone())
                     .collect::<Vec<_>>();
-                let user_accounts: AccountsResponse =
+                let user_accounts: crate::responses::AccountsResponse =
                     self.get_user_accounts_by_ids(&user_ids).await?;
                 let mut all_transaction_details = Vec::new();
-                for transaction in transactions {
+                for transaction in transactions
+                    .into_iter()
+                    .filter(|transaction| transaction.status == 2)
+                {
                     if let Some(receiver_id) = transaction.receiver_id {
                         if let Some(account) = user_accounts
                             .response
                             .iter()
                             .find(|account| account.id == receiver_id)
                         {
-                            let date_time =
-                                NaiveDateTime::from_timestamp(transaction.created_at, 0);
                             let amount = transaction.amount as f64 / 1000.;
-
                             all_transaction_details.push(Transaction {
                                 total_amount: amount,
                                 user_name: account.username.clone(),
@@ -278,5 +287,32 @@ impl Gatherer for Fansly {
 
     fn name(&self) -> &'static str {
         "fansly"
+    }
+}
+
+pub fn to_gatherer_media(
+    fansly_media: structs::Media,
+    sub_name: &'_ str,
+) -> gatherer_core::Result<gatherer_core::gatherers::Media> {
+    if let Some(details) = fansly_media.details {
+        if details.locations.is_empty() {
+            return Err(format!("Content not available: {:?}", details).into());
+        }
+        let original_file_path = Path::new(&details.file_name);
+        // debug!("The original upload file name was {:?}", original_file_path);
+        let mut file_name = fansly_media.id.clone();
+        file_name += &original_file_path
+            .extension()
+            .map(|ext| format!(".{}", &ext.to_str().unwrap_or_default()))
+            .unwrap_or_default();
+        Ok(gatherer_core::gatherers::Media {
+            file_name,
+            url: details.locations[0].location.to_string(),
+            mime_type: details.mimetype,
+            paid: fansly_media.purchased,
+            user_name: sub_name.to_string(),
+        })
+    } else {
+        Err(format!("Content not available: {:?}", fansly_media).into())
     }
 }

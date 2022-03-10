@@ -1,10 +1,3 @@
-// Turn off common dev assertions only for debug builds, release builds will still work as normal
-#![warn(clippy::all)]
-#![cfg_attr(
-    debug_assertions,
-    allow(dead_code, unused_macros, unused_imports, unused_variables)
-)]
-
 mod constants;
 mod gatherer;
 mod responses;
@@ -14,12 +7,12 @@ pub use self::gatherer::*;
 use chrono::prelude::*;
 use gatherer_core::{
     gatherers::{self, Gatherer, GathererErrors, Subscription, SubscriptionName},
-    http::{self, Client, ClientConfig, Headers, Url},
+    http::{self, Client, ClientConfig, Headers},
     Result,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FanslyConfig {
@@ -34,7 +27,7 @@ pub struct Fansly {
     http_client: Client,
 }
 
-/// Functions to interact with the fansly struct
+/// Functions to interact with the Fansly struct
 impl Fansly {
     pub async fn new(fansly_conf: FanslyConfig) -> Result<Fansly> {
         if !fansly_conf.enabled {
@@ -244,7 +237,7 @@ impl Fansly {
                         .iter()
                         .filter_map(|fan_sub| {
                             if fan_sub.status == 3 {
-                                Some(fan_sub.account_id.to_string())
+                                fan_sub.account_id.as_ref().cloned()
                             } else {
                                 None
                             }
@@ -255,8 +248,10 @@ impl Fansly {
                         sub_account_ids.len()
                     );
                     if let Ok(account_stubs) = self.get_followed_accounts_stubs().await {
-                        let mut stub_ids: Vec<String> =
-                            account_stubs.into_iter().map(|s| s.account_id).collect();
+                        let mut stub_ids: Vec<String> = account_stubs
+                            .into_iter()
+                            .map(|s| s.account_id.unwrap_or_default())
+                            .collect();
                         log::info!(
                             "Found {} accounts that are being followed but not subscribed to",
                             stub_ids.len()
@@ -411,13 +406,15 @@ impl Fansly {
 
     pub async fn get_transaction_details(
         &self,
-        user_names: &[String],
+        _user_names: &[String],
     ) -> Result<Vec<structs::WalletTransaction>> {
         let mut all_transactions = Vec::new();
         let mut offset = 0;
 
         loop {
-            let endpoint = format!("/api/v1/account/wallets/transactions?before=&after=&limit=10&offset={offset}");
+            let endpoint = format!(
+                "/api/v1/account/wallets/transactions?before=&after=&limit=10&offset={offset}"
+            );
             let result = self
                 .http_client
                 .get(&endpoint, self.get_default_headers())
@@ -441,7 +438,11 @@ impl Fansly {
                     }
                 }
                 Err(err) => {
-                    log::error!("Unable to get transaction data from {}. {:?}", endpoint, err)
+                    log::error!(
+                        "Unable to get transaction data from {}. {:?}",
+                        endpoint,
+                        err
+                    )
                 }
             }
         }
@@ -456,7 +457,9 @@ fn combine_subs_and_account_info(
 ) -> Vec<Subscription> {
     subs.iter()
         .filter_map(|sub| {
-            let account_info = accounts.iter().find(|c| c.id == sub.account_id);
+            let account_info = accounts
+                .iter()
+                .find(|c| c.id == sub.account_id.clone().unwrap_or_default());
             match account_info {
                 Some(info) => {
                     let mut video_count = 0;
@@ -494,40 +497,28 @@ fn combine_subs_and_account_info(
         .collect()
 }
 
-fn fansly_details_to_gatherers_media(
-    details: &'_ structs::MediaDetails,
-    loc: &'_ str,
-    purchased: bool,
-) -> gatherers::Media {
-    let ext = match Path::new(&details.file_name).extension() {
-        Some(ext) => ext.to_str().unwrap(),
-        None => {
-            let mimetype = &details.mimetype;
-            log::error!(
-                "File name `{}` does not have an extension. Inferring from mimetype: {}",
-                details.file_name,
-                &mimetype
-            );
-            mimetype.split('/').last().unwrap()
-        }
-    };
-    gatherers::Media {
-        file_name: format!("{}.{}", details.id, ext),
-        paid: purchased,
-        mime_type: details.mimetype.to_string(),
-        url: loc.to_string(),
-    }
-}
-
-fn fansly_media_to_gatherers_media(media: structs::Media) -> Option<gatherers::Media> {
+fn fansly_media_to_gatherers_media(
+    media: structs::Media,
+    user_name: &'_ str,
+) -> Option<gatherers::Media> {
     log::trace!("Converting to gatherer_core::Media. {:?}", media);
     if let Some(details) = &media.details {
         if let Some(location) = &details.locations.get(0) {
-            Some(fansly_details_to_gatherers_media(
-                details,
-                &location.location[..],
-                media.purchased,
-            ))
+            Some(gatherers::Media {
+                file_name: if !&details.file_name.is_empty() {
+                    details.file_name.clone()
+                } else {
+                    format!(
+                        "{}.{}",
+                        details.id,
+                        details.mimetype.split('/').last().unwrap()
+                    )
+                },
+                paid: media.purchased,
+                mime_type: details.mimetype.to_string(),
+                url: location.location.clone(),
+                user_name: user_name.to_string(),
+            })
         } else {
             log::debug!("Unable to determine a location for {}", details.file_name);
             None

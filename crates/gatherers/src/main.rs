@@ -1,10 +1,4 @@
 #![warn(clippy::all)]
-// Turn off common dev assertions only for debug builds, release builds will continue to generate all warnings
-#![cfg_attr(
-    debug_assertions,
-    allow(dead_code, unused_macros, unused_imports, unused_variables)
-)]
-
 mod cli;
 mod cli_tasks;
 mod config;
@@ -31,7 +25,7 @@ fn main() {
         let cli = Cli::new();
 
         // Setup logging, if the verbose flag is provided provided more detailed output
-        init_logging(&cli).expect("Failed to initailize the logger");
+        init_logging(&cli).expect("Failed to initialize the logger");
 
         // If the user provided a config file path use that, we fall back to the default if not
         let cfg_path = if let Some(path) = &cli.config_file_path {
@@ -53,8 +47,8 @@ fn main() {
             }
         };
 
-        match cli.action.exec(config).await {
-            Ok(()) => println!("Completed"),
+        match cli.action.exec(config, &cli.gatherers).await {
+            Ok(()) => eprintln!("Completed"),
             Err(err) => log::error!("Command failed: {:?}", err),
         };
     });
@@ -67,8 +61,8 @@ async fn get_available_gatherers(
     let mut gatherers: Vec<Arc<dyn Gatherer>> = Vec::new();
     log::debug!("Gatherer names from CLI args: {:?}", gatherer_names);
     if !gatherer_names.is_empty() {
-        let names: Vec<&str> = gatherer_names.iter().map(|n| n.as_str()).collect();
-        for name in names.into_iter() {
+        let gatherer_names: Vec<&str> = gatherer_names.iter().map(|n| n.as_str()).collect();
+        for name in gatherer_names.into_iter() {
             log::debug!("Checking for gatherer named {}", name);
             match name {
                 "fansly" => {

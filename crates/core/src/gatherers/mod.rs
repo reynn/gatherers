@@ -8,20 +8,9 @@ mod modifiers;
 pub mod structs;
 
 pub use self::{errors::GathererErrors, structs::*};
-use crate::{
-    downloaders::{BatchDownloader, Downloadable},
-    Result,
-};
+use crate::{downloaders::Downloadable, Result};
 use async_channel::Sender;
-use chrono::prelude::*;
-use futures::future::err;
-use futures::Future;
-use std::{
-    collections::HashMap,
-    fmt::Display,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 use strum::IntoEnumIterator;
 
 #[async_trait::async_trait]
@@ -91,7 +80,7 @@ pub trait Gatherer: std::fmt::Debug + Sync + Send {
     }
     async fn gather_transaction_details(
         &self,
-        user_names: &[String],
+        _user_names: &[String],
     ) -> Result<Vec<structs::Transaction>> {
         Err(Box::new(GathererErrors::NotSupportedByGatherer {
             gatherer_name: self.name().to_string(),
@@ -115,13 +104,13 @@ pub enum GatherType {
     Purchased,
 }
 
-async fn run_gatherer(info: structs::GathererInfo) -> Result<()> {
-    let name = info.name;
+pub async fn run_gatherer(info: structs::GathererInfo) -> Result<()> {
+    let gatherer_name = info.name;
     let gather_type = info.gather_type;
     let sub = info.subscription;
     log::info!(
-        "{:>10}: Starting to gather {:8} for {:^20}",
-        name,
+        "{:>12}: Starting to gather {} for {}",
+        gatherer_name,
         gather_type,
         &sub.name.username
     );
@@ -131,38 +120,47 @@ async fn run_gatherer(info: structs::GathererInfo) -> Result<()> {
         GatherType::Messages => info.gatherer.gather_media_from_messages(&sub),
         GatherType::Bundles => info.gatherer.gather_media_from_bundles(&sub),
         GatherType::Stories => info.gatherer.gather_media_from_stories(&sub),
-        _ => {
-            log::info!("Skipped gathering {:?}", gather_type);
-            return Ok(());
-        }
+        GatherType::Purchased => info.gatherer.gather_paid_content(),
     }
     .await;
 
     match all_media {
         Ok(medias) => {
-            let sub_path = info.base_path.join(&sub.name.username.to_ascii_lowercase());
-            log::info!(
-                "{:>10}: Completed gathering {:8} for {:^20}. Found [{:^4}] items",
-                name,
-                gather_type,
-                sub.name.username,
-                medias.len()
-            );
+            if gather_type == GatherType::Purchased {
+                log::info!(
+                    "{:>12}: Completed gathering all paid content. Discovered [{}] items",
+                    gatherer_name,
+                    medias.len()
+                )
+            } else {
+                log::info!(
+                    "{:>12}: Completed gathering {:^10} for {:^20}. Found [{}] items",
+                    gatherer_name,
+                    gather_type,
+                    sub.name.username,
+                    medias.len()
+                )
+            };
             for media in medias.iter() {
-                let downloadable_path =
-                    info.base_path
-                        .clone()
-                        .join(if media.paid { "paid" } else { "free" });
+                let downloadable_path = info
+                    .base_path
+                    .clone()
+                    .join(&media.user_name)
+                    .join(if media.paid { "paid" } else { "free" });
                 // let item = Downloadable::from_media_with_path(media, downloadable_path);
                 match info
                     .downloader
                     .try_send(Downloadable::from_media_with_path(media, downloadable_path))
                 {
                     Ok(_) => {
-                        log::debug!("{:>12}: Sent item to download queue", name)
+                        log::debug!("{:>12}: Sent item to download queue", gatherer_name)
                     }
                     Err(send_err) => {
-                        log::error!("{:>12}: Failed to send to queue. {:?}", name, send_err)
+                        log::error!(
+                            "{:>12}: Failed to send to queue. {:?}",
+                            gatherer_name,
+                            send_err
+                        )
                     }
                 }
             }
@@ -170,8 +168,8 @@ async fn run_gatherer(info: structs::GathererInfo) -> Result<()> {
         }
         Err(gather_err) => {
             let err_msg = format!(
-                "{:>12}: Failed to gather {}. Error: {:?}",
-                name, gather_type, gather_err
+                "{:>12}: Failed to gather {:^10}. Error: {:?}",
+                gatherer_name, gather_type, gather_err
             );
             log::error!("{}", err_msg);
             Err(err_msg.into())
@@ -187,8 +185,19 @@ pub async fn run_gatherer_for_all(
     user_names: &[String],
     ignored_user_names: &[String],
 ) -> Result<()> {
+    let base_path: PathBuf = base_path.into();
     let mut subs_tasks = Vec::new();
     let gatherer_name = gatherer.name();
+    if user_names.is_empty() {
+        subs_tasks.push(run_gatherer(GathererInfo {
+            base_path: base_path.clone().join(gatherer.name().to_ascii_lowercase()),
+            gather_type: GatherType::Purchased,
+            gatherer: gatherer.clone(),
+            subscription: Default::default(),
+            downloader: download_tx.clone(),
+            name: gatherer_name.to_string(),
+        }));
+    }
     println!("{gatherer_name}: Getting subscriptions.");
     let sub_result = gatherer.gather_subscriptions().await;
     match sub_result {
@@ -196,14 +205,14 @@ pub async fn run_gatherer_for_all(
             let total_subs = all_subscriptions.len();
             let subscriptions = if let Some(subs_limit) = limits.subscriptions {
                 log::info!(
-                    "{:>10}: Limiting to only {} subscriptions",
+                    "{:>12}: Limiting to only {} subscriptions",
                     gatherer_name,
                     subs_limit
                 );
                 all_subscriptions.into_iter().take(subs_limit).collect()
             } else if !user_names.is_empty() {
                 log::info!(
-                    "{:>10}: Omitting all but {} subscriptions",
+                    "{:>12}: Omitting all but {} subscriptions",
                     gatherer_name,
                     user_names.len()
                 );
@@ -213,7 +222,7 @@ pub async fn run_gatherer_for_all(
                     .collect()
             } else if !ignored_user_names.is_empty() {
                 log::info!(
-                    "{:>10}: Removing {} ignored users from the list",
+                    "{:>12}: Removing {} ignored users from the list",
                     gatherer_name,
                     ignored_user_names.len()
                 );
@@ -237,10 +246,9 @@ pub async fn run_gatherer_for_all(
                 );
             }
             // Start building output directory for our gatherer
-            let base_path: PathBuf = base_path.into();
-            let base_path = base_path.join(gatherer.name().to_ascii_lowercase());
+            let base_path = base_path.clone().join(gatherer.name().to_ascii_lowercase());
 
-            // Get a custom iter over our gatherable types, filtering out unneeded values for this function
+            // Get a custom iter over our gather-able types, filtering out unneeded values for this function
             let sub_gatherables: Vec<_> = GatherType::iter()
                 .filter(|t| !t.eq(&GatherType::Purchased))
                 .collect();
@@ -251,7 +259,7 @@ pub async fn run_gatherer_for_all(
                     // This is the parameters fed into our gatherer
                     let info = structs::GathererInfo {
                         // Add the users name to the gatherers base path for output dir
-                        base_path: base_path.clone().join(&sub.name.username),
+                        base_path: base_path.clone(),
                         gather_type: *gather_type,
                         gatherer: gatherer.clone(),
                         subscription: sub.clone(),
@@ -267,7 +275,7 @@ pub async fn run_gatherer_for_all(
 
     futures::future::join_all(subs_tasks).await;
     log::info!(
-        "{}: Completed gathering everything for all subs",
+        "{:>12}: Completed gathering everything for all subs",
         gatherer_name
     );
 

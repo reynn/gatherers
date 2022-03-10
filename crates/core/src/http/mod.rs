@@ -9,10 +9,10 @@ pub use self::{cookies::Cookie, errors::HttpErrors, request::*, response::Respon
 use crate::Result;
 use serde::{Deserialize, Serialize};
 pub use serde_json::json;
-use std::{collections::HashMap, convert::TryInto, str::FromStr, sync::Arc};
+use std::{collections::HashMap, convert::TryInto, str::FromStr};
 use surf::{
     http::headers::{HeaderValue, COOKIE},
-    Config, RequestBuilder,
+    Config,
 };
 
 pub type Url = surf::Url;
@@ -25,7 +25,6 @@ pub struct ClientConfig {
 
 #[derive(Debug, Clone)]
 pub struct Client {
-    conf: ClientConfig,
     client: surf::Client,
     cookies: Option<Headers>,
 }
@@ -42,7 +41,6 @@ impl Client {
             .expect("Failed to create a client from the base config");
         Self {
             client,
-            conf: cfg,
             cookies: None,
         }
     }
@@ -100,10 +98,6 @@ impl Client {
         let req: surf::Request = req.into();
         let resp = self.client.send(req).await?;
         Ok(Response::from_surf(resp))
-    }
-
-    fn parse_url(url: &'_ str) -> Result<url::Url> {
-        Ok(Url::parse(url)?)
     }
 
     pub fn set_cookies(&mut self, cookies: Headers) {

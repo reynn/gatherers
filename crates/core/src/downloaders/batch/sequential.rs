@@ -1,12 +1,11 @@
 use std::fmt::Formatter;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crate::{
     downloaders::{BatchDownloader, Downloadable, DownloaderStats},
     Result,
 };
 use async_channel::{Receiver, Sender, TrySendError};
-use futures::lock::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct SequentialDownloader {
@@ -14,19 +13,12 @@ pub struct SequentialDownloader {
     receiver: Receiver<Downloadable>,
     // Download Queue
     sender: Sender<Downloadable>,
-    successfully_processed: usize,
-    failed_to_process: usize,
 }
 
 impl SequentialDownloader {
     pub fn new() -> Self {
         let (sender, receiver) = async_channel::unbounded();
-        Self {
-            receiver,
-            sender,
-            successfully_processed: Default::default(),
-            failed_to_process: Default::default(),
-        }
+        Self { receiver, sender }
     }
 
     pub fn sender(&self) -> Sender<Downloadable> {
@@ -47,7 +39,6 @@ impl BatchDownloader for SequentialDownloader {
     }
 
     async fn add_item_to_queue(&self, item: Downloadable) -> Result<()> {
-        let item_name = String::from(&item.file_name);
         let mut item = item;
         loop {
             match self.sender.try_send(item) {
@@ -87,10 +78,10 @@ impl BatchDownloader for SequentialDownloader {
         let thread_number = 1;
         loop {
             match self.process_single_item(thread_number).await {
-                Ok(bytes_written) => {
+                Ok(_) => {
                     stats.success += 1;
                 }
-                Err(down_err) => {
+                Err(_) => {
                     stats.failed += 1;
                 }
             };

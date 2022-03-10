@@ -2,20 +2,17 @@ use crate::{
     downloaders::{BatchDownloader, Downloadable, DownloaderStats},
     tasks::spawn_on_thread,
 };
-use async_channel::{Receiver, Sender};
+use async_channel::Receiver;
 use async_task::Task;
-use futures::{lock::Mutex, StreamExt};
-use futures_lite::prelude::*;
-// use futures_lite::{future, StreamExt};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use futures::lock::Mutex;
 use std::fmt::Formatter;
-use std::{sync::Arc, thread, time::Duration};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct MultiThreadedDownloader {
     worker_threads: u8,
-    chunk_size: Option<u32>,
-    min_size_to_chunk: Option<u64>,
+    // chunk_size: Option<u32>,
+    // min_size_to_chunk: Option<u64>,
     receiver: Receiver<Downloadable>,
 }
 
@@ -24,8 +21,8 @@ impl MultiThreadedDownloader {
         // let (sender, _) = async_channel::unbounded();
         Self {
             worker_threads: w_c,
-            chunk_size: None,
-            min_size_to_chunk: None,
+            // chunk_size: None,
+            // min_size_to_chunk: None,
             receiver: rx,
         }
     }
@@ -50,11 +47,11 @@ impl BatchDownloader for MultiThreadedDownloader {
         "multi-threaded".into()
     }
 
-    async fn add_item_to_queue(&self, item: Downloadable) -> crate::Result<()> {
+    async fn add_item_to_queue(&self, _item: Downloadable) -> crate::Result<()> {
         Ok(())
     }
 
-    async fn process_single_item(&self, worker_num: usize) -> crate::Result<u64> {
+    async fn process_single_item(&self, _worker_num: usize) -> crate::Result<u64> {
         todo!()
     }
 
@@ -83,6 +80,8 @@ impl BatchDownloader for MultiThreadedDownloader {
                         let recv_item = receiver.recv().await;
                         match recv_item {
                             Ok(item) => {
+                                let file_path = item.get_file_path();
+                                let file_path = file_path.as_path();
                                 let file_name = item.file_name.clone();
                                 log::debug!(
                                     "W({:2}): Received new item {:?}, {} still left.",
@@ -99,15 +98,15 @@ impl BatchDownloader for MultiThreadedDownloader {
                                         } else {
                                             log::info!(
                                                 "W({:2}): Successfully saved item {:?} wrote {} bytes",
-                                                worker_num, file_name, bw
+                                                worker_num, file_path, bw
                                             );
                                             stats.success += 1;
                                         }
                                     }
                                     Err(save_err) => {
                                         log::error!(
-                                            "W({:2}): Failed to save item {}. Save Error: {:?}",
-                                            worker_num, file_name, save_err
+                                            "W({:2}): Failed to save item {:?}. Save Error: {:?}",
+                                            worker_num, file_path, save_err
                                         );
                                         let mut stats = stats.lock().await;
                                         stats.total += 1;
@@ -132,11 +131,11 @@ impl BatchDownloader for MultiThreadedDownloader {
 
         // Work through subscriptions 10 at a time, waiting until they complete
         // as they finish a new should take it's place (TODO: confirm)
-        futures::stream::iter(worker_threads_2)
-            .for_each_concurrent(10, |sub_worker| async move { sub_worker.await })
-            .await;
+        // futures::stream::iter(worker_threads_2)
+        //     .for_each_concurrent(10, |sub_worker| async move { sub_worker.await })
+        //     .await;
 
-        // futures::future::join_all(worker_threads).await;
+        futures::future::join_all(worker_threads_2).await;
 
         let stats = stats.lock().await;
 

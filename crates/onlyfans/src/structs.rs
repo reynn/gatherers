@@ -1,19 +1,17 @@
 use gatherer_core::gatherers::SubscriptionName;
 use serde::{Deserialize, Serialize};
 
-pub type Subscriptions = Vec<Subscription>;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Subscription {
     pub view: String,
-    pub avatar: String,
+    pub avatar: Option<String>,
     #[serde(rename = "avatarThumbs")]
-    pub avatar_thumbs: AvatarThumbs,
-    pub header: String,
+    pub avatar_thumbs: Option<AvatarThumbs>,
+    pub header: Option<String>,
     #[serde(rename = "headerSize")]
-    pub header_size: HeaderSize,
+    pub header_size: Option<HeaderSize>,
     #[serde(rename = "headerThumbs")]
-    pub header_thumbs: HeaderThumbs,
+    pub header_thumbs: Option<HeaderThumbs>,
     pub id: i64,
     pub name: String,
     pub username: String,
@@ -61,19 +59,19 @@ pub struct Subscription {
     #[serde(rename = "canRestrict")]
     pub can_restrict: bool,
     #[serde(rename = "subscribedBy")]
-    pub subscribed_by: bool,
+    pub subscribed_by: Option<bool>,
     #[serde(rename = "subscribedByExpire")]
-    pub subscribed_by_expire: bool,
+    pub subscribed_by_expire: Option<bool>,
     #[serde(rename = "subscribedByExpireDate")]
     pub subscribed_by_expire_date: String,
     #[serde(rename = "subscribedByAutoprolong")]
-    pub subscribed_by_autoprolong: bool,
+    pub subscribed_by_autoprolong: Option<bool>,
     #[serde(rename = "subscribedIsExpiredNow")]
     pub subscribed_is_expired_now: bool,
     #[serde(rename = "currentSubscribePrice")]
-    pub current_subscribe_price: f64,
+    pub current_subscribe_price: Option<f64>,
     #[serde(rename = "subscribedOn")]
-    pub subscribed_on: bool,
+    pub subscribed_on: Option<bool>,
     #[serde(rename = "subscribedOnExpiredNow")]
     pub subscribed_on_expired_now: Option<bool>,
     #[serde(rename = "subscribedOnDuration")]
@@ -97,10 +95,9 @@ pub struct Subscription {
     #[serde(rename = "canTrialSend")]
     pub can_trial_send: bool,
     #[serde(rename = "isBlocked")]
-    pub is_blocked: bool,
+    pub is_blocked: Option<bool>,
     #[serde(rename = "displayName")]
     pub display_name: Option<String>,
-    // pub notice: Option<serde_json::Value>,
 }
 
 impl From<Subscription> for gatherer_core::gatherers::Subscription {
@@ -114,7 +111,7 @@ impl From<Subscription> for gatherer_core::gatherers::Subscription {
             plan: "paid".into(),
             started: None,
             renewal_date: None,
-            rewewal_price: of_sub.current_subscribe_price.into(),
+            rewewal_price: of_sub.current_subscribe_price.unwrap_or(0.).into(),
             ends_at: None,
             video_count: 0,
             image_count: 0,
@@ -138,14 +135,6 @@ pub struct DynamicRule {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Me {
     pub view: String,
-    // pub avatar: Option<Avatar>,
-    // #[serde(rename = "avatarThumbs")]
-    // pub avatar_thumbs: Option<serde_json::Value>,
-    // pub header: Option<serde_json>,
-    // #[serde(rename = "headerSize")]
-    // pub header_size: Option<serde_json::Value>,
-    // #[serde(rename = "headerThumbs")]
-    // pub header_thumbs: Option<serde_json::Value>,
     pub id: i64,
     pub name: String,
     pub username: String,
@@ -202,8 +191,6 @@ pub struct Me {
     pub audios_count: i64,
     #[serde(rename = "mediasCount")]
     pub medias_count: i64,
-    // #[serde(rename = "lastSeen")]
-    // pub last_seen: Option<serde_json::Value>,
     #[serde(rename = "favoritesCount")]
     pub favorites_count: i64,
     #[serde(rename = "favoritedCount")]
@@ -364,10 +351,52 @@ pub struct Me {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct PurchasedItem {
+    #[serde(rename = "responseType")]
+    pub response_type: String,
+    pub text: Option<String>,
+    #[serde(rename = "lockedText")]
+    pub locked_text: bool,
+    #[serde(rename = "isFree")]
+    pub is_free: Option<bool>,
+    pub price: f64,
+    #[serde(rename = "isMediaReady")]
+    pub is_media_ready: bool,
+    #[serde(rename = "mediaCount")]
+    pub media_count: i64,
+    pub media: Vec<Media>,
+    pub previews: Option<Vec<i64>>,
+    #[serde(rename = "isTip")]
+    pub is_tip: Option<bool>,
+    #[serde(rename = "isReportedByMe")]
+    pub is_reported_by_me: Option<bool>,
+    #[serde(rename = "fromUser")]
+    pub from_user: Option<FromUser>,
+    pub author: Option<FromUser>,
+    pub id: i64,
+    #[serde(rename = "isOpened")]
+    pub is_opened: bool,
+    #[serde(rename = "isNew")]
+    pub is_new: Option<bool>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    #[serde(rename = "changedAt")]
+    pub changed_at: Option<String>,
+    #[serde(rename = "cancelSeconds")]
+    pub cancel_seconds: Option<i64>,
+    #[serde(rename = "isLiked")]
+    pub is_liked: Option<bool>,
+    #[serde(rename = "canPurchase")]
+    pub can_purchase: Option<bool>,
+    #[serde(rename = "canReport")]
+    pub can_report: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
     #[serde(rename = "responseType")]
     pub response_type: String,
-    pub text: String,
+    pub text: Option<String>,
     #[serde(rename = "lockedText")]
     pub locked_text: bool,
     #[serde(rename = "isFree")]
@@ -382,26 +411,26 @@ pub struct Message {
     #[serde(rename = "isTip")]
     pub is_tip: bool,
     #[serde(rename = "isReportedByMe")]
-    pub is_reported_by_me: bool,
+    pub is_reported_by_me: Option<bool>,
     #[serde(rename = "fromUser")]
-    pub from_user: FromUser,
+    pub from_user: Option<FromUser>,
     #[serde(rename = "isFromQueue")]
     pub is_from_queue: bool,
     pub id: i64,
     #[serde(rename = "isOpened")]
     pub is_opened: bool,
     #[serde(rename = "isNew")]
-    pub is_new: bool,
+    pub is_new: Option<bool>,
     #[serde(rename = "createdAt")]
     pub created_at: Option<String>,
     #[serde(rename = "changedAt")]
     pub changed_at: Option<String>,
     #[serde(rename = "cancelSeconds")]
-    pub cancel_seconds: i64,
+    pub cancel_seconds: Option<i64>,
     #[serde(rename = "isLiked")]
-    pub is_liked: bool,
+    pub is_liked: Option<bool>,
     #[serde(rename = "canPurchase")]
-    pub can_purchase: bool,
+    pub can_purchase: Option<bool>,
     #[serde(rename = "canPurchaseReason")]
     pub can_purchase_reason: String,
     #[serde(rename = "canReport")]
@@ -413,6 +442,17 @@ pub struct FromUser {
     pub id: i64,
     #[serde(rename = "_view")]
     pub view: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListUser {
+    pub view: String,
+    pub id: i64,
+    pub name: String,
+    pub username: String,
+    pub avatar: String,
+    #[serde(rename = "avatarThumbs")]
+    pub avatar_thumbs: Option<AvatarThumbs>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -473,15 +513,9 @@ pub struct SubscribedByData {
     #[serde(rename = "discountPeriod")]
     pub discount_period: i64,
     #[serde(rename = "subscribeAt")]
-    pub subscribe_at: String,
+    pub subscribe_at: Option<String>,
     #[serde(rename = "expiredAt")]
     pub expired_at: Option<String>,
-    // #[serde(rename = "renewedAt")]
-    // pub renewed_at: Option<serde_json::Value>,
-    // #[serde(rename = "discountFinishedAt")]
-    // pub discount_finished_at: Option<serde_json::Value>,
-    // #[serde(rename = "discountStartedAt")]
-    // pub discount_started_at: Option<serde_json::Value>,
     pub status: Option<String>,
     #[serde(rename = "isMuted")]
     pub is_muted: bool,
@@ -506,8 +540,6 @@ pub struct Subscribe {
     pub start_date: String,
     #[serde(rename = "expireDate")]
     pub expire_date: String,
-    // #[serde(rename = "cancelDate")]
-    // pub cancel_date: Option<serde_json::Value>,
     pub price: f64,
     #[serde(rename = "regularPrice")]
     pub regular_price: f64,
@@ -519,8 +551,6 @@ pub struct Subscribe {
     pub subscribe_type: String,
     #[serde(rename = "offerStart")]
     pub offer_start: Option<String>,
-    // #[serde(rename = "offerEnd")]
-    // pub offer_end: Option<serde_json::Value>,
     #[serde(rename = "isCurrent")]
     pub is_current: bool,
 }
@@ -543,12 +573,7 @@ pub struct SubscribedOnData {
     #[serde(rename = "expiredAt")]
     pub expired_at: String,
     #[serde(rename = "renewedAt")]
-    pub renewed_at: String,
-    // #[serde(rename = "discountFinishedAt")]
-    // pub discount_finished_at: Option<serde_json::Value>,
-    // #[serde(rename = "discountStartedAt")]
-    // pub discount_started_at: Option<serde_json::Value>,
-    // pub status: Option<serde_json::Value>,
+    pub renewed_at: Option<String>,
     #[serde(rename = "isMuted")]
     pub is_muted: bool,
     #[serde(rename = "unsubscribeReason")]
@@ -581,9 +606,9 @@ pub struct Post {
     #[serde(rename = "expiredAt")]
     pub expired_at: Option<String>,
     pub author: Author,
-    pub text: String,
+    pub text: Option<String>,
     #[serde(rename = "rawText")]
-    pub raw_text: String,
+    pub raw_text: Option<String>,
     #[serde(rename = "lockedText")]
     pub locked_text: bool,
     #[serde(rename = "isFavorite")]
@@ -722,9 +747,9 @@ pub struct Story {
     #[serde(rename = "userId")]
     pub user_id: i64,
     #[serde(rename = "createdAt")]
-    pub created_at: String,
+    pub created_at: Option<String>,
     #[serde(rename = "expiredAt")]
-    pub expired_at: String,
+    pub expired_at: Option<String>,
     #[serde(rename = "isReady")]
     pub is_ready: bool,
     #[serde(rename = "viewersCount")]
@@ -736,7 +761,7 @@ pub struct Story {
     #[serde(rename = "isWatched")]
     pub is_watched: bool,
     #[serde(rename = "isLiked")]
-    pub is_liked: bool,
+    pub is_liked: Option<bool>,
     #[serde(rename = "canDelete")]
     pub can_delete: bool,
     #[serde(rename = "isHighlightCover")]
@@ -759,10 +784,10 @@ pub struct Transaction {
     pub net: Option<i64>,
     pub fee: Option<i64>,
     #[serde(rename = "createdAt")]
-    pub created_at: String,
+    pub created_at: Option<String>,
     pub currency: String,
     pub description: String,
-    pub status: String,
+    pub status: Option<String>,
     pub user: Option<User>,
     pub source: Option<String>,
     pub id: String,

@@ -109,6 +109,7 @@ pub struct Media {
     pub paid: bool,
     pub mime_type: String,
     pub url: String,
+    pub user_name: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -142,7 +143,6 @@ impl std::fmt::Display for DateTime {
         }
     }
 }
-
 
 #[derive(Debug, Clone, Default)]
 pub struct SubscriptionCost(pub Option<f64>);

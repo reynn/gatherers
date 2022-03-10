@@ -1,12 +1,10 @@
 mod batch;
 mod downloadable;
-mod errors;
 mod file;
 
 pub use self::{
     batch::{BatchDownloader, MultiThreadedDownloader, SequentialDownloader},
     downloadable::Downloadable,
-    errors::DownloaderErrors,
     file::{FileDownloader, InMemoryFileDownloader, StreamingFileDownloader},
 };
 use serde::{Deserialize, Serialize};

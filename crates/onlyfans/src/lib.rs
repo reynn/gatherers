@@ -1,35 +1,24 @@
-// Turn off common dev assertions only for debug builds, release builds will still work as normal
-#![warn(clippy::all)]
-#![cfg_attr(
-    debug_assertions,
-    allow(dead_code, unused_macros, unused_imports, unused_variables)
-)]
-
 mod builder;
 mod constants;
 mod gatherer;
 mod responses;
 mod structs;
 
-use crate::responses::MessagesResponse;
-use builder::OnlyFansBuilder;
-use cookie::Cookie;
-use gatherer_core::http::json;
+use crate::{
+    builder::OnlyFansBuilder,
+    structs::{DynamicRule, ListUser},
+};
 use gatherer_core::{
-    gatherers::{Gatherer, GathererErrors},
-    http::{self, Client, ClientConfig, Headers, Url},
+    gatherers::GathererErrors,
+    http::{Client, ClientConfig, Headers, Url},
     Result,
 };
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
-use std::future::Future;
 use std::{
     collections::HashMap,
-    str::FromStr,
-    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
-use structs::DynamicRule;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct OnlyFansConfig {
@@ -47,7 +36,6 @@ pub struct OnlyFans {
     config: OnlyFansConfig,
     dynamic_rule: structs::DynamicRule,
     http_client: Client,
-    cookie: String,
     authed_user: structs::Me,
 }
 
@@ -107,13 +95,20 @@ fn generate_request_headers(
 
 /// Impl block for OnlyFans API calls
 impl OnlyFans {
-    async fn get_subscriptions(&self) -> Result<Vec<structs::Subscription>> {
+    async fn get_subscriptions(
+        &self,
+        sub_status: Option<&'_ str>,
+    ) -> Result<Vec<structs::Subscription>> {
         let mut subscriptions = Vec::new();
         let mut offset = 0;
         let mut more_pages = true;
 
         while more_pages {
-            let endpoint = format!("/api2/v2/subscriptions/subscribes?offset={offset}&type=active&sort=desc&field=expire_date&limit=10");
+            let endpoint = if let Some(status) = sub_status {
+                format!("/api2/v2/subscriptions/subscribes?offset={offset}&type={status}&sort=desc&field=expire_date&limit=10")
+            } else {
+                format!("/api2/v2/subscriptions/subscribes?offset={offset}&sort=desc&field=expire_date&limit=10")
+            };
             if let Ok(partial_subs) = self
                 .http_client
                 .get(
@@ -126,16 +121,73 @@ impl OnlyFans {
                 )
                 .await
             {
-                let mut subs: responses::SubscriptionResponse = partial_subs.as_json().await?;
+                let subs: responses::SubscriptionResponse = partial_subs.as_json().await?;
                 if subs.len() < 10 {
                     more_pages = false;
                 }
-                subscriptions.append(&mut subs);
+
+                // return only the active subscribers
+                subscriptions.append(
+                    &mut subs
+                        .into_iter()
+                        .filter(|s| !s.subscribed_is_expired_now)
+                        .collect(),
+                );
                 offset += 10;
             }
         }
-
         Ok(subscriptions)
+    }
+
+    async fn get_paid_content(&self) -> Result<Vec<structs::PurchasedItem>> {
+        let mut paid_content = Vec::new();
+        let mut has_more = true;
+        let mut offset = 0;
+
+        while has_more {
+            let endpoint = format!(
+                "/api2/v2/posts/paid?limit=10&skip_users=all&format=infinite&offset={}",
+                offset
+            );
+            match self
+                .http_client
+                .get(
+                    &endpoint,
+                    Some(crate::generate_request_headers(
+                        &self.config,
+                        &endpoint,
+                        &self.dynamic_rule,
+                    )),
+                )
+                .await
+            {
+                Ok(response) => {
+                    let purchases_response: Result<responses::PurchasedItemsResponse> =
+                        response.as_json().await;
+                    match purchases_response {
+                        Ok(mut purchases) => {
+                            paid_content.append(&mut purchases.list);
+                            if !purchases.has_more {
+                                has_more = false;
+                            }
+                        }
+                        Err(json_err) => {
+                            log::error!("Failed to serialize JSON into struct: {:?}", json_err)
+                        }
+                    }
+                }
+                Err(response_err) => {
+                    log::debug!(
+                        "Failed to get data from endpoint {}. {:?}",
+                        endpoint,
+                        response_err
+                    );
+                }
+            }
+            offset += 10;
+        }
+
+        Ok(paid_content)
     }
 
     async fn get_user_posts(&self, user_id: &str) -> Result<Vec<structs::Post>> {
@@ -233,7 +285,7 @@ impl OnlyFans {
                 .await
             {
                 Ok(success_response) => {
-                    let msg_success: Result<responses::MessagesResponse> =
+                    let msg_success: Result<crate::responses::MessagesResponse> =
                         success_response.as_json().await;
                     match msg_success {
                         Ok(curr_messages) => {
@@ -249,8 +301,13 @@ impl OnlyFans {
                             }
                             // filter out messages that have been sent by the authed user
                             for curr_msg in curr_messages.list.into_iter() {
-                                if curr_msg.from_user.id != authed_user_id {
-                                    messages.push(curr_msg);
+                                match &curr_msg.from_user {
+                                    None => messages.push(curr_msg),
+                                    Some(from_user) => {
+                                        if from_user.id != authed_user_id {
+                                            messages.push(curr_msg)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -349,11 +406,47 @@ impl OnlyFans {
                         }
                     }
                 }
-                Err(transaction_err) => {}
+                Err(transaction_err) => {
+                    log::error!("{:?}", transaction_err);
+                    return Err(transaction_err);
+                }
             }
         }
 
         Ok(transactions)
+    }
+
+    async fn get_users_by_id(&self, user_ids: &[i64]) -> Result<Vec<ListUser>> {
+        let endpoint = format!(
+            "/api2/v2/users/list?{}",
+            user_ids
+                .iter()
+                .map(|user_id| format!("t[]={}", user_id))
+                .collect::<Vec<String>>()
+                .join("&")
+        );
+
+        match self
+            .http_client
+            .get(
+                &endpoint,
+                Some(crate::generate_request_headers(
+                    &self.config,
+                    &endpoint,
+                    &self.dynamic_rule,
+                )),
+            )
+            .await
+        {
+            Ok(response) => {
+                let users: Result<responses::ListOfUsersResponse> = response.as_json().await;
+                match users {
+                    Ok(users_list) => Ok(users_list.into_iter().map(|(_, user)| user).collect()),
+                    Err(json_err) => Err(json_err),
+                }
+            }
+            Err(http_err) => Err(http_err),
+        }
     }
 }
 
@@ -379,7 +472,6 @@ fn create_signed_headers(
     let static_param = &rule.static_param;
     let msg = vec![static_param.as_str(), since_epoch.as_str(), path, user_id].join("\n");
     let sha = calculate_sha1(msg);
-    let checksum_constant = &rule.checksum_constant;
     let sha_ascii = sha.to_ascii_lowercase();
 
     let mut result: i32 = 0;

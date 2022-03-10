@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct MediaBundle {
     pub id: String,
     #[serde(rename = "accountId")]
-    pub account_id: String,
+    pub account_id: Option<String>,
     #[serde(rename = "previewId")]
     pub preview_id: Option<String>,
     #[serde(rename = "permissionFlags")]

@@ -3,7 +3,7 @@ mod streaming;
 
 pub use self::{in_memory::InMemoryFileDownloader, streaming::StreamingFileDownloader};
 use async_trait::async_trait;
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 #[async_trait]
 pub trait FileDownloader: Send + Sync {
