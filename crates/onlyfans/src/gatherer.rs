@@ -24,13 +24,13 @@ impl Gatherer for crate::OnlyFans {
                 let mut media = Vec::new();
 
                 for post in user_posts {
-                    for post_media in post.media {
+                    for post_media in post.media.unwrap_or_default() {
                         match to_gatherer_media(&post_media, &sub.name.username) {
                             Some(valid_media) => {
                                 let mut valid_media: gatherer_core::gatherers::Media = valid_media;
                                 // If the post has a cost and it has been opened than we have paid for it
                                 valid_media.paid = if let Some(price) = post.price {
-                                    post.is_opened && (price > 0.)
+                                    post.is_opened.unwrap_or(false) && (price > 0.)
                                 } else {
                                     false
                                 };
@@ -58,14 +58,14 @@ impl Gatherer for crate::OnlyFans {
             Ok(user_messages) => {
                 let mut media = Vec::new();
                 for msg in user_messages {
-                    for msg_media in msg.media {
+                    for msg_media in msg.media.unwrap_or_default() {
                         match to_gatherer_media(&msg_media, &sub.name.username) {
                             Some(valid_media) => {
                                 let mut valid_media: gatherer_core::gatherers::Media = valid_media;
                                 // if the post is not free, and you cannot purchase it but it is opened than you have paid for this content
-                                valid_media.paid = !msg.is_free
-                                    && !msg.can_purchase.unwrap_or_default()
-                                    && msg.is_opened;
+                                valid_media.paid = !msg.is_free.unwrap_or(false)
+                                    && !msg.can_purchase.unwrap_or(false)
+                                    && msg.is_opened.unwrap_or(false);
                                 media.push(valid_media)
                             }
                             None => {
@@ -89,7 +89,7 @@ impl Gatherer for crate::OnlyFans {
             Ok(user_stories) => {
                 let mut media = vec![];
                 for story in user_stories {
-                    for story_media in story.media {
+                    for story_media in story.media.unwrap_or_default() {
                         match to_gatherer_media(&story_media, &sub.name.username) {
                             Some(valid_media) => media.push(valid_media),
                             None => {
@@ -149,50 +149,15 @@ impl Gatherer for crate::OnlyFans {
                             }
                         }
                     };
-                    for media in item.media.into_iter() {
+                    // set all of these results to ensure paid flag is set properly
+                    for media in item.media.unwrap_or_default() {
                         if let Some(mut purchased_media) = to_gatherer_media(&media, &user_name) {
                             purchased_media.paid = true;
                             results.push(purchased_media);
                         }
                     }
                 }
-                // let mut results = paid_content
-                //     .into_iter()
-                //     .flat_map(|item| {
-                //         let user_id: i64 = match &item.response_type[..] {
-                //             "message" => {
-                //                 if let Some(from_user) = item.from_user {
-                //                     from_user.id
-                //                 } else {
-                //                     0
-                //                 }
-                //             }
-                //             "post" => {
-                //                 if let Some(author) = item.author {
-                //                     0
-                //                 } else {
-                //                     0
-                //                 }
-                //             }
-                //             _ => 0,
-                //         };
-                //         let user_name = if let Some(user_name) = users.get(&user_id) {
-                //             user_name
-                //         } else {
-                //             match self.get_users_by_id(&[user_id]).await {
-                //                 Ok(users) => {}
-                //                 Err(user_err) => {}
-                //             }
-                //         };
-                //         item.media
-                //             .into_iter()
-                //             .filter_map(|purchased_media| {
-                //                 to_gatherer_media(&purchased_media, user_name)
-                //             })
-                //             .collect::<Vec<_>>()
-                //     })
-                //     .collect::<Vec<_>>();
-                // set all of these results to ensure paid flag is set properly
+
                 Ok(results)
             }
             Err(paid_content_err) => Err(paid_content_err),

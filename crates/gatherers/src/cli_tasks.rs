@@ -192,6 +192,7 @@ pub async fn list(cur_gatherers: Vec<Arc<dyn Gatherer + 'static>>) -> Result<()>
     }
 }
 
+#[allow(dead_code)]
 pub async fn like(_cur_gatherers: Vec<Arc<dyn Gatherer + 'static>>) -> Result<()> {
     Ok(())
 }
@@ -236,7 +237,6 @@ pub async fn transactions(
             TransactionFormat::PlainText => {
                 for (gatherer, totals) in gatherer_totals.into_iter() {
                     println!("Total transaction costs for {gatherer}");
-                    let length = totals.keys().max().unwrap_or(&String::from("")).len();
                     for (user_name, total) in totals.into_iter() {
                         println!("{}: {:.2}", user_name, total);
                     }

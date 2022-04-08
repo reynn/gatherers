@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 pub(super) type SubscriptionResponse = Vec<Subscription>;
 pub(super) type MeResponse = Me;
-pub(super) type DynamicRuleResponse = DynamicRule;
 pub(super) type PostsResponse = ListResponse<Post>;
 pub(super) type MessagesResponse = ListResponse<Message>;
 pub(super) type StoriesResponse = Vec<Story>;

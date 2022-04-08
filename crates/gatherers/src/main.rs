@@ -5,18 +5,16 @@ mod config;
 mod macros;
 
 use self::{
-    cli::{Cli, CliAction},
+    cli::Cli,
     config::Config,
 };
 use gatherer_core::{
     self,
     directories::Directories,
-    downloaders::{BatchDownloader, MultiThreadedDownloader},
-    gatherers::{self, Gatherer},
-    tasks::spawn_on_thread,
+    gatherers::Gatherer,
 };
-use log::{Level, LevelFilter};
-use std::{path::Path, sync::Arc, time::Instant};
+use log::LevelFilter;
+use std::sync::Arc;
 
 fn main() {
     smol::block_on(async {
