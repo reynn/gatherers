@@ -1,6 +1,8 @@
+use async_trait::async_trait;
+
 pub struct InMemoryFileDownloader;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl super::FileDownloader for InMemoryFileDownloader {
     async fn download(&self, url: &'_ str, output_path: std::path::PathBuf) -> crate::Result<u64> {
         let mut output_file = if output_path.exists() {

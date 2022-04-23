@@ -1,5 +1,4 @@
-use crate::Result;
-use std::collections::HashMap;
+use {crate::Result, std::collections::HashMap};
 
 #[derive(Default, Debug)]
 pub struct Cookie {

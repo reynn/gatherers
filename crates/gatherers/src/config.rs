@@ -1,12 +1,14 @@
-use gatherer_core::{directories::Directories, Result};
 #[cfg(feature = "fansly")]
 use gatherer_fansly::FanslyConfig;
 #[cfg(feature = "onlyfans")]
-use gatherer_onlyfans::OnlyFansConfig;
-use serde::{Deserialize, Serialize};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
+use {
+    gatherer_core::{directories::Directories, Result},
+    gatherer_onlyfans::OnlyFansConfig,
+    serde::{Deserialize, Serialize},
+    std::{
+        path::{Path, PathBuf},
+        sync::Arc,
+    },
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -14,7 +16,9 @@ pub struct Config {
     pub config_dir: String,
     pub download_dir: String,
     pub workers: u8,
+    #[cfg(feature = "onlyfans")]
     pub fansly: FanslyConfig,
+    #[cfg(feature = "onlyfans")]
     pub onlyfans: OnlyFansConfig,
 }
 

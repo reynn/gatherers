@@ -1,6 +1,8 @@
-use super::InMemoryFileDownloader;
-use crate::{gatherers::Media, Result};
-use std::{fmt::Display, path::PathBuf};
+use {
+    super::InMemoryFileDownloader,
+    crate::{gatherers::Media, Result},
+    std::{fmt::Display, path::PathBuf},
+};
 
 // const DEFAULT_BUFFER_SIZE: u32 = 1024; // ~1 mb
 // const DEFAULT_MIN_SIZE_TO_CHUNK: u64 = (100 * 1024) * 1024; // roughly 100 mb

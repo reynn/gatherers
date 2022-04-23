@@ -1,11 +1,13 @@
-use crate::{cli::TransactionFormat, config::Config};
-use gatherer_core::{
-    downloaders::{BatchDownloader, MultiThreadedDownloader},
-    gatherers::{self, Gatherer},
-    tasks::spawn_on_thread,
-    Result,
+use {
+    crate::{cli::TransactionFormat, config::Config},
+    gatherer_core::{
+        downloaders::{BatchDownloader, MultiThreadedDownloader},
+        gatherers::{self, Gatherer},
+        tasks::spawn_on_thread,
+        Result,
+    },
+    std::{collections::HashMap, path::Path, sync::Arc, time::Instant},
 };
-use std::{collections::HashMap, path::Path, sync::Arc, time::Instant};
 
 pub async fn start(
     cur_gatherers: Vec<Arc<dyn Gatherer + 'static>>,

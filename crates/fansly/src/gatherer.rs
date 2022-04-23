@@ -1,14 +1,17 @@
-use crate::{
-    structs::{self, MessageGroup},
-    Fansly,
+use {
+    crate::{
+        structs::{self, MessageGroup},
+        Fansly,
+    },
+    async_trait::async_trait,
+    gatherer_core::{
+        gatherers::{Gatherer, Media, Subscription, Transaction},
+        Result,
+    },
+    std::path::Path,
 };
-use gatherer_core::{
-    gatherers::{Gatherer, Media, Subscription, Transaction},
-    Result,
-};
-use std::path::Path;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Gatherer for Fansly {
     async fn gather_subscriptions(&self) -> Result<Vec<Subscription>> {
         self.get_account_subscriptions().await

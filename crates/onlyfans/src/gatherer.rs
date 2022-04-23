@@ -1,11 +1,14 @@
-use gatherer_core::{
-    gatherers::{structs::DateTime, Gatherer, Media, Subscription, Transaction},
-    Result,
+use {
+    async_trait::async_trait,
+    gatherer_core::{
+        gatherers::{structs::DateTime, Gatherer, Media, Subscription, Transaction},
+        Result,
+    },
+    std::collections::HashMap,
+    url::*,
 };
-use std::collections::HashMap;
-use url::*;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl Gatherer for crate::OnlyFans {
     async fn gather_subscriptions(&self) -> Result<Vec<Subscription>> {
         match self.get_subscriptions(Some("active")).await {

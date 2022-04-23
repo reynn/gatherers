@@ -1,6 +1,7 @@
-use std::path::PathBuf;
-
-use directories::{BaseDirs, ProjectDirs};
+use {
+    directories::{BaseDirs, ProjectDirs},
+    std::path::{Path, PathBuf},
+};
 
 pub struct Directories<'a> {
     project_dirs: Option<ProjectDirs>,
@@ -41,7 +42,8 @@ impl<'a> Directories<'a> {
     }
 
     pub fn get_default_temp_dir(&self) -> PathBuf {
-        PathBuf::new()
+        let tmp_dir = std::env::var("TEMP_DIR").unwrap_or_default();
+        Path::new(&tmp_dir).into()
     }
 }
 

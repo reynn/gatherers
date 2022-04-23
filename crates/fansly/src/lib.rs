@@ -4,15 +4,17 @@ mod responses;
 mod structs;
 
 pub use self::gatherer::*;
-use chrono::prelude::*;
-use gatherer_core::{
-    gatherers::{self, Gatherer, GathererErrors, Subscription, SubscriptionName},
-    http::{self, Client, ClientConfig, Headers},
-    Result,
+use {
+    chrono::prelude::*,
+    gatherer_core::{
+        gatherers::{self, Gatherer, GathererErrors, Subscription, SubscriptionName},
+        http::{self, Client, ClientConfig, Headers},
+        Result,
+    },
+    regex::Regex,
+    serde::{Deserialize, Serialize},
+    std::collections::HashMap,
 };
-use regex::Regex;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FanslyConfig {

@@ -1,9 +1,8 @@
-use crate::Result;
-use surf::http::headers::HeaderValue;
+use {crate::Result, async_trait::async_trait, surf::http::headers::HeaderValue};
 
-pub struct StreamingFileDownloader {}
+pub struct StreamingFileDownloader;
 
-#[async_trait::async_trait]
+#[async_trait]
 impl super::FileDownloader for StreamingFileDownloader {
     async fn download(&self, _url: &'_ str, _output_path: std::path::PathBuf) -> Result<u64> {
         todo!()

@@ -8,13 +8,16 @@ mod modifiers;
 pub mod structs;
 
 pub use self::{errors::GathererErrors, structs::*};
-use crate::{downloaders::Downloadable, Result};
-use async_channel::Sender;
-use std::{path::PathBuf, sync::Arc};
-use strum::IntoEnumIterator;
+use {
+    crate::{downloaders::Downloadable, Result},
+    async_channel::Sender,
+    async_trait::async_trait,
+    std::{fmt::Debug, path::PathBuf, sync::Arc},
+    strum::IntoEnumIterator,
+};
 
-#[async_trait::async_trait]
-pub trait Gatherer: std::fmt::Debug + Sync + Send {
+#[async_trait]
+pub trait Gatherer: Debug + Sync + Send {
     /// Interface with the source site to get the subscriptions of the authed user
     ///
     /// TODO: add more detail
@@ -198,7 +201,7 @@ pub async fn run_gatherer_for_all(
             name: gatherer_name.to_string(),
         }));
     }
-    println!("{gatherer_name}: Getting subscriptions.");
+    println!("{}: Getting subscriptions.", gatherer_name);
     let sub_result = gatherer.gather_subscriptions().await;
     match sub_result {
         Ok(all_subscriptions) => {
@@ -235,12 +238,14 @@ pub async fn run_gatherer_for_all(
             };
             if subscriptions.len() == total_subs {
                 println!(
-                    "{gatherer_name}: Found {} subscriptions",
+                    "{}: Found {} subscriptions",
+                    gatherer_name,
                     subscriptions.len(),
                 );
             } else {
                 println!(
-                    "{gatherer_name}: Found {} subscriptions (Filtered from {})",
+                    "{}: Found {} subscriptions (Filtered from {})",
+                    gatherer_name,
                     subscriptions.len(),
                     total_subs
                 );

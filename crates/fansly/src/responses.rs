@@ -1,5 +1,7 @@
-use crate::structs;
-use serde::{Deserialize, Serialize};
+use {
+    crate::structs,
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct FanslyResponse<T> {

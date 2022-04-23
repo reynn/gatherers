@@ -5,14 +5,19 @@ mod cookies;
 mod request;
 mod response;
 
-pub use self::{cookies::Cookie, errors::HttpErrors, request::*, response::Response};
-use crate::Result;
-use serde::{Deserialize, Serialize};
-pub use serde_json::json;
-use std::{collections::HashMap, convert::TryInto, str::FromStr};
-use surf::{
-    http::headers::{HeaderValue, COOKIE},
-    Config,
+pub use {
+    self::{cookies::Cookie, errors::HttpErrors, request::*, response::Response},
+    serde_json::json,
+};
+
+use {
+    crate::Result,
+    serde::{Deserialize, Serialize},
+    std::{collections::HashMap, convert::TryInto, str::FromStr},
+    surf::{
+        http::headers::{HeaderValue, COOKIE},
+        Config,
+    },
 };
 
 pub type Url = surf::Url;

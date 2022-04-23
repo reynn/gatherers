@@ -1,5 +1,7 @@
-use gatherer_core::gatherers::SubscriptionName;
-use serde::{Deserialize, Serialize};
+use {
+    gatherer_core::gatherers::SubscriptionName,
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Subscription {
@@ -149,11 +151,11 @@ pub struct Me {
     #[serde(rename = "canPayInternal")]
     pub can_pay_internal: Option<bool>,
     #[serde(rename = "vatName")]
-    pub vat_name: String,
+    pub vat_name: Option<String>,
     #[serde(rename = "vatCountry")]
-    pub vat_country: String,
+    pub vat_country: Option<String>,
     #[serde(rename = "vatState")]
-    pub vat_state: String,
+    pub vat_state: Option<String>,
     #[serde(rename = "canSendChatToAll")]
     pub can_send_chat_to_all: Option<bool>,
     #[serde(rename = "creditsMin")]

@@ -1,7 +1,9 @@
-use crate::{constants, responses, structs, OnlyFans, OnlyFansConfig};
-use gatherer_core::{
-    http::{Client, Cookie},
-    Result,
+use {
+    crate::{constants, responses, structs, OnlyFans, OnlyFansConfig},
+    gatherer_core::{
+        http::{Client, Cookie},
+        Result,
+    },
 };
 
 pub(crate) struct OnlyFansBuilder {

@@ -1,11 +1,16 @@
-use std::{fmt::Display, path::PathBuf, sync::Arc};
-
-use crate::{
-    downloaders::Downloadable,
-    gatherers::{GatherType, Gatherer},
+use {
+    crate::{
+        downloaders::Downloadable,
+        gatherers::{GatherType, Gatherer},
+    },
+    async_channel::Sender,
+    chrono::Utc,
+    std::{
+        fmt::{Display, Formatter},
+        path::PathBuf,
+        sync::Arc,
+    },
 };
-use async_channel::Sender;
-use chrono::Utc;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RunLimits {
@@ -32,7 +37,7 @@ pub struct Post {
 }
 
 impl Display for Post {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Post(id={}; title={:?})", self.id, self.title)
     }
 }
@@ -61,7 +66,7 @@ pub struct Subscription {
 }
 
 impl Display for Subscription {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "Subscription(id={}; user_name={})",
@@ -94,7 +99,7 @@ pub struct SubscriptionName {
 }
 
 impl Display for SubscriptionName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let name = match &self.display_name {
             Some(display_name) => &display_name[..],
             None => &self.username[..],
@@ -135,8 +140,8 @@ impl From<chrono::DateTime<Utc>> for DateTime {
     }
 }
 
-impl std::fmt::Display for DateTime {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for DateTime {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             Some(dt) => write!(f, "{}", dt.format("%Y-%m-%d %H:%M:%S")),
             None => write!(f, "No Date Available"),
@@ -147,8 +152,8 @@ impl std::fmt::Display for DateTime {
 #[derive(Debug, Clone, Default)]
 pub struct SubscriptionCost(pub Option<f64>);
 
-impl std::fmt::Display for SubscriptionCost {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for SubscriptionCost {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             Some(cost) => write!(f, "{}", cost),
             None => write!(f, "*Free*"),

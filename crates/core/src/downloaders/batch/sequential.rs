@@ -1,11 +1,12 @@
-use std::fmt::Formatter;
-use std::time::Duration;
-
-use crate::{
-    downloaders::{BatchDownloader, Downloadable, DownloaderStats},
-    Result,
+use {
+    crate::{
+        downloaders::{BatchDownloader, Downloadable, DownloaderStats},
+        Result,
+    },
+    async_channel::{Receiver, Sender, TrySendError},
+    async_trait::async_trait,
+    std::{fmt::Formatter, time::Duration},
 };
-use async_channel::{Receiver, Sender, TrySendError};
 
 #[derive(Debug, Clone)]
 pub struct SequentialDownloader {
@@ -32,7 +33,7 @@ impl std::fmt::Display for SequentialDownloader {
     }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl BatchDownloader for SequentialDownloader {
     fn name(&self) -> String {
         "sequential".into()
@@ -75,9 +76,8 @@ impl BatchDownloader for SequentialDownloader {
 
     async fn process_all_items(&self) -> Result<DownloaderStats> {
         let mut stats = DownloaderStats::default();
-        let thread_number = 1;
         loop {
-            match self.process_single_item(thread_number).await {
+            match self.process_single_item(0).await {
                 Ok(_) => {
                     stats.success += 1;
                 }
@@ -86,7 +86,6 @@ impl BatchDownloader for SequentialDownloader {
                 }
             };
         }
-        // Ok(stats)
     }
 }
 

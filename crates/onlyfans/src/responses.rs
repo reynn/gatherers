@@ -1,5 +1,8 @@
-use super::structs::*;
-use serde::{Deserialize, Serialize};
+use {
+    super::structs::*,
+    serde::{Deserialize, Serialize},
+    std::collections::HashMap,
+};
 
 pub(super) type SubscriptionResponse = Vec<Subscription>;
 pub(super) type MeResponse = Me;
@@ -8,7 +11,7 @@ pub(super) type MessagesResponse = ListResponse<Message>;
 pub(super) type StoriesResponse = Vec<Story>;
 pub(super) type TransactionsResponse = Transactions;
 pub(super) type PurchasedItemsResponse = ListResponse<PurchasedItem>;
-pub(super) type ListOfUsersResponse = std::collections::HashMap<String, ListUser>;
+pub(super) type ListOfUsersResponse = HashMap<String, ListUser>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListResponse<T> {

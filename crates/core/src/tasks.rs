@@ -1,5 +1,4 @@
-use async_task::Task;
-use futures::Future;
+use {async_task::Task, futures::Future};
 
 pub fn spawn_on_thread<F, T>(future: F) -> Task<T>
 where

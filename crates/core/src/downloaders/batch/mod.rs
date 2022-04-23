@@ -2,8 +2,7 @@ mod multi_threaded;
 mod sequential;
 
 pub use self::{multi_threaded::MultiThreadedDownloader, sequential::SequentialDownloader};
-use crate::Result;
-use async_trait::async_trait;
+use {crate::Result, async_trait::async_trait};
 
 //
 #[async_trait]

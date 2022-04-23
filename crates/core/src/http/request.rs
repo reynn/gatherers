@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-
 pub use surf::http::{
     headers::{HeaderName, HeaderValue, Headers},
     Method,

@@ -4,20 +4,22 @@ mod gatherer;
 mod responses;
 mod structs;
 
-use crate::{
-    builder::OnlyFansBuilder,
-    structs::{DynamicRule, ListUser},
-};
-use gatherer_core::{
-    gatherers::GathererErrors,
-    http::{Client, ClientConfig, Headers, Url},
-    Result,
-};
-use serde::{Deserialize, Serialize};
-use sha1::{Digest, Sha1};
-use std::{
-    collections::HashMap,
-    time::{SystemTime, UNIX_EPOCH},
+use {
+    crate::{
+        builder::OnlyFansBuilder,
+        structs::{DynamicRule, ListUser},
+    },
+    gatherer_core::{
+        gatherers::GathererErrors,
+        http::{Client, ClientConfig, Headers, Url},
+        Result,
+    },
+    serde::{Deserialize, Serialize},
+    sha1::{Digest, Sha1},
+    std::{
+        collections::HashMap,
+        time::{SystemTime, UNIX_EPOCH},
+    },
 };
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

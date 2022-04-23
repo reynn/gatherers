@@ -4,17 +4,12 @@ mod cli_tasks;
 mod config;
 mod macros;
 
-use self::{
-    cli::Cli,
-    config::Config,
+use {
+    self::{cli::Cli, config::Config},
+    gatherer_core::{self, directories::Directories, gatherers::Gatherer},
+    log::LevelFilter,
+    std::sync::Arc,
 };
-use gatherer_core::{
-    self,
-    directories::Directories,
-    gatherers::Gatherer,
-};
-use log::LevelFilter;
-use std::sync::Arc;
 
 fn main() {
     smol::block_on(async {
@@ -103,7 +98,7 @@ fn init_logging(cli: &'_ Cli) -> gatherer_core::Result<()> {
                 message
             ))
         })
-        .level(match &cli.verbose {
+        .level(match &cli.verbose.unwrap_or_else(|| 0) {
             0 => LevelFilter::Error,
             1 => LevelFilter::Info,
             2 => LevelFilter::Debug,

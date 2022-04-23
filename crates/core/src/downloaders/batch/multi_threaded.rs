@@ -1,12 +1,13 @@
-use crate::{
-    downloaders::{BatchDownloader, Downloadable, DownloaderStats},
-    tasks::spawn_on_thread,
+use {
+    crate::{
+        downloaders::{BatchDownloader, Downloadable, DownloaderStats},
+        tasks::spawn_on_thread,
+    },
+    async_channel::Receiver,
+    async_task::Task,
+    futures::lock::Mutex,
+    std::{fmt::Formatter, sync::Arc},
 };
-use async_channel::Receiver;
-use async_task::Task;
-use futures::lock::Mutex;
-use std::fmt::Formatter;
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct MultiThreadedDownloader {
@@ -59,11 +60,12 @@ impl BatchDownloader for MultiThreadedDownloader {
         let stats = Arc::new(Mutex::new(DownloaderStats::default()));
 
         // Generate a collection of tasks that will gather sub data
-        let worker_threads_2: Vec<Task<()>> = (0..self.worker_threads)
+        let worker_threads: Vec<Task<()>> = (1..self.worker_threads+1)
             .map(|worker_num| {
-                let worker_num = worker_num + 1;
+                let worker_num = worker_num;
                 let receiver = self.receiver.clone();
                 let stats = Arc::clone(&stats);
+
                 spawn_on_thread(async move {
                     log::debug!("W({:2}): Waiting for items...", worker_num);
                     loop {
@@ -129,13 +131,7 @@ impl BatchDownloader for MultiThreadedDownloader {
             })
             .collect();
 
-        // Work through subscriptions 10 at a time, waiting until they complete
-        // as they finish a new should take it's place (TODO: confirm)
-        // futures::stream::iter(worker_threads_2)
-        //     .for_each_concurrent(10, |sub_worker| async move { sub_worker.await })
-        //     .await;
-
-        futures::future::join_all(worker_threads_2).await;
+        futures::future::join_all(worker_threads).await;
 
         let stats = stats.lock().await;
 
