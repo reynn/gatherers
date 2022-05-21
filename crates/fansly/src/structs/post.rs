@@ -76,7 +76,7 @@ pub struct Avatar {
     #[serde(rename = "accountId")]
     pub account_id: Option<String>,
     pub mimetype: String,
-    pub filename: String,
+    pub filename: Option<String>,
     pub width: i64,
     pub height: i64,
     pub metadata: String,
@@ -102,7 +102,7 @@ pub struct Variant {
     pub variant_type: i64,
     pub status: i64,
     pub mimetype: String,
-    pub filename: String,
+    pub filename: Option<String>,
     pub width: i64,
     pub height: i64,
     #[serde(rename = "updatedAt")]

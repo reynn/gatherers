@@ -507,8 +507,8 @@ fn fansly_media_to_gatherers_media(
     if let Some(details) = &media.details {
         if let Some(location) = &details.locations.get(0) {
             Some(gatherers::Media {
-                file_name: if !&details.file_name.is_empty() {
-                    details.file_name.clone()
+                file_name: if let Some(filename) = &details.file_name {
+                    filename.clone()
                 } else {
                     format!(
                         "{}.{}",
@@ -522,7 +522,7 @@ fn fansly_media_to_gatherers_media(
                 user_name: user_name.to_string(),
             })
         } else {
-            log::debug!("Unable to determine a location for {}", details.file_name);
+            log::debug!("Unable to determine a location for {:?}", details.file_name);
             None
         }
     } else {

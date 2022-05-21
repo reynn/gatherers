@@ -1,12 +1,12 @@
 [package]
 edition = "2021"
-name = "gatherer-fansly"
+name    = "gatherer-fansly"
 version = "0.1.0"
 
 [dependencies]
-async-trait = "0.1"
-chrono = "0.4"
+async-trait   = "0.1"
+chrono        = "0.4"
 gatherer-core = { path = "../core" }
-log = "0.4"
-regex = "1.5"
-serde = { version = "1.0", features = ["derive"] }
+log           = "0.4"
+regex         = "1.5"
+serde         = { version = "1.0", features = ["derive"] }

@@ -1,15 +1,15 @@
 [package]
 edition = "2021"
-name = "gatherer-onlyfans"
+name    = "gatherer-onlyfans"
 version = "0.1.0"
 
 [dependencies]
-async-trait = "0.1"
-chrono = "0.4"
-cookie = { version = "0.16.0-rc.1", default-features = false, features = ["key-expansion"] }
+async-trait   = "0.1"
+chrono        = "0.4"
+cookie        = { version = "0.16.0-rc.1", default-features = false, features = ["key-expansion"] }
 data-encoding = "2.3"
 gatherer-core = { path = "../core" }
-log = "0.4"
-serde = { version = "1.0", features = ["derive"] }
-sha-1 = "0.10"
-url = "2.2"
+log           = "0.4"
+serde         = { version = "1.0", features = ["derive"] }
+sha-1         = "0.10"
+url           = "2.2"

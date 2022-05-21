@@ -39,7 +39,11 @@ pub async fn start(
                     subscriptions: limit_subs,
                 };
                 let user_names = user_names.clone();
-                let ignored_user_names = ignored_user_names.clone();
+                let mut fansly_ignored_users = app_config.fansly.ignore_lists.clone();
+                let mut onlyfans_ignored_users = app_config.onlyfans.ignore_lists.clone();
+                let mut ignored_user_names = ignored_user_names.clone();
+                ignored_user_names.append(&mut fansly_ignored_users);
+                ignored_user_names.append(&mut onlyfans_ignored_users);
                 async move {
                     let gatherer_name = gatherer.name();
                     let start_time = Instant::now();

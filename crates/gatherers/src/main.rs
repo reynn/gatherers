@@ -54,8 +54,7 @@ async fn get_available_gatherers(
     let mut gatherers: Vec<Arc<dyn Gatherer>> = Vec::new();
     log::debug!("Gatherer names from CLI args: {:?}", gatherer_names);
     if !gatherer_names.is_empty() {
-        let gatherer_names: Vec<&str> = gatherer_names.iter().map(|n| n.as_str()).collect();
-        for name in gatherer_names.into_iter() {
+        for name in gatherer_names.iter().map(|n| n.as_str()) {
             log::debug!("Checking for gatherer named {}", name);
             match name {
                 "fansly" => {

@@ -301,7 +301,8 @@ pub fn to_gatherer_media(
         if details.locations.is_empty() {
             return Err(format!("Content not available: {:?}", details).into());
         }
-        let original_file_path = Path::new(&details.file_name);
+        let filename = details.file_name.unwrap_or_default();
+        let original_file_path = Path::new(&filename);
         // debug!("The original upload file name was {:?}", original_file_path);
         let mut file_name = fansly_media.id.clone();
         file_name += &original_file_path
