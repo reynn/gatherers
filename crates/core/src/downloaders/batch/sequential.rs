@@ -1,3 +1,4 @@
+use eyre::eyre;
 use {
     crate::{
         downloaders::{BatchDownloader, Downloadable, DownloaderStats},
@@ -50,7 +51,7 @@ impl BatchDownloader for SequentialDownloader {
                         item = e;
                     }
                     TrySendError::Closed(_) => {
-                        return Err("Download queue has been closed already".into())
+                        eyre::bail!("Download queue has been closed already")
                     }
                 },
             }
@@ -66,11 +67,12 @@ impl BatchDownloader for SequentialDownloader {
                 log::info!("W({}) Successfully downloaded, {:?}", worker_num, file_name);
                 Ok(bytes_written)
             }
-            Err(down_err) => Err(format!(
+            Err(down_err) => Err(eyre!(
                 "W({}): Failed to download file {:?}. {:?}",
-                worker_num, file_name, down_err
-            )
-            .into()),
+                worker_num,
+                file_name,
+                down_err
+            )),
         }
     }
 

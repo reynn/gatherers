@@ -1,3 +1,4 @@
+use eyre::eyre;
 use {
     crate::{cli::TransactionFormat, config::Config},
     gatherer_core::{
@@ -95,7 +96,7 @@ pub async fn start(
 
         Ok(())
     } else {
-        Err("No gatherers available".into())
+        Err(eyre!("No gatherers available"))
     }
 }
 
@@ -194,7 +195,7 @@ pub async fn list(cur_gatherers: Vec<Arc<dyn Gatherer + 'static>>) -> Result<()>
         futures::future::join_all(primary_threads).await;
         Ok(())
     } else {
-        Err("No gatherers available".into())
+        Err(eyre!("No gatherers available"))
     }
 }
 
@@ -252,6 +253,6 @@ pub async fn transactions(
         };
         Ok(())
     } else {
-        Err("No gatherers available".into())
+        Err(eyre!("No gatherers available"))
     }
 }

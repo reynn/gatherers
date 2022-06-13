@@ -1,6 +1,8 @@
+use eyre::eyre;
+use std::fmt::Formatter;
 use {
     crate::{config::Config, get_available_gatherers},
-    bpaf::*,
+    clap::{Parser, Subcommand},
     gatherer_core::Result,
     std::{path::PathBuf, str::FromStr, sync::Arc},
 };
@@ -25,93 +27,91 @@ impl FromStr for TransactionFormat {
     }
 }
 
+impl std::fmt::Display for TransactionFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransactionFormat::Json => {
+                write!(f, "json")
+            }
+            TransactionFormat::PlainText => {
+                write!(f, "text")
+            }
+            TransactionFormat::Table => {
+                write!(f, "table")
+            }
+        }
+    }
+}
+
 impl Default for TransactionFormat {
     fn default() -> Self {
         Self::PlainText
     }
 }
 
-#[derive(Debug, Clone, Bpaf)]
-#[bpaf(options)]
+/// Gatherers will get media you have access to from paid sites such as OnlyFans and Fansly
+#[derive(Debug, Clone, Parser)]
 pub struct Cli {
-    #[bpaf(short, long)]
+    #[clap(short, long)]
     pub config_file_path: Option<PathBuf>,
-    #[bpaf(external(verbose))]
-    pub verbose: Option<usize>,
-    #[bpaf(long)]
+    #[clap(flatten)]
+    pub verbose: clap_verbosity_flag::Verbosity,
+    #[clap(long)]
     pub content_types: Option<ContentTypes>,
-    #[bpaf(short, long)]
+    #[clap(short, long)]
     pub target_folder: Option<PathBuf>,
-    #[bpaf(short, long)]
+    #[clap(short, long)]
     pub log_file: Option<PathBuf>,
-    #[bpaf(external(cli_action))]
+    #[clap(subcommand)]
     pub action: CliAction,
-    #[bpaf(short, long)]
+    #[clap(short, long)]
     pub gatherers: Vec<String>,
 }
 
 impl Cli {
     pub fn new() -> Self {
-        cli().run()
+        Cli::parse()
     }
 }
 
-fn verbose() -> Parser<Option<usize>> {
-    short('v')
-        .long("verbose")
-        .help("Increase the verbosity of output\nSpecify no more than 3 times\n-v -v -v or -vvv")
-        .req_flag(())
-        .many()
-        .map(|xs| xs.len())
-        .guard(|&x| x <= 3, "Cannot have more than 3 levels of verbosity")
-        .optional()
-}
-
-/// the set of subcommands for [`Cli`] along with the needed arguments
-#[derive(Debug, Clone, Bpaf)]
+#[derive(Debug, Clone, Subcommand)]
 pub enum CliAction {
     /// Start running the main gatherer logic
-    #[bpaf(command("start"))]
     Start {
-        #[bpaf(short, long, fallback(Vec::new()))]
+        #[clap(short, long)]
         user_names: Vec<String>,
-        #[bpaf(short, long, fallback(8))]
+        #[clap(short, long, default_value_t = 8)]
         worker_count: u8,
-        #[bpaf(short, long)]
+        #[clap(short = 'S', long)]
         limit_subs: Option<usize>,
-        #[bpaf(short, long)]
+        #[clap(short = 'M', long)]
         limit_media: Option<usize>,
-        #[bpaf(short, long, fallback(Vec::new()))]
+        #[clap(short, long)]
         ignored_user_names: Vec<String>,
     },
-    #[bpaf(command("purchased"))]
     /// Gather only purchased content
     Purchased,
     /// Like posts from users you are subscribed to
-    #[bpaf(command("like"))]
     Like {
-        #[bpaf(short, long)]
-        like_all: Option<bool>,
-        #[bpaf(short, long)]
-        like_user: Option<String>,
+        #[clap(short, long)]
+        all: Option<bool>,
+        #[clap(short, long)]
+        user: Option<String>,
     },
     /// Unlike posts from users you are subscribed to
-    #[bpaf(command("unlike"))]
     Unlike {
-        #[bpaf(short, long)]
-        like_all: Option<bool>,
-        #[bpaf(short, long)]
-        like_user: Option<String>,
+        #[clap(short, long)]
+        all: Option<bool>,
+        #[clap(short, long)]
+        user: Option<String>,
     },
     /// List users you currently have active subscriptions to
-    #[bpaf(command("list"))]
     List,
     /// Get a list of transactions based on the authenticated user account
-    #[bpaf(command("transactions"))]
     Transactions {
-        #[bpaf(short, long, fallback(Vec::new()))]
+        #[clap(short, long)]
         user_names: Vec<String>,
-        #[bpaf(short, long, fallback(TransactionFormat::Table))]
+        #[clap(short, long, default_value_t = TransactionFormat::Table)]
         format: TransactionFormat,
     },
 }
@@ -140,19 +140,19 @@ impl CliAction {
                     .await?;
                     Ok(())
                 }
-                Err(err) => Err(format!("Failed to get configured gatherers. {:?}", err).into()),
+                Err(err) => Err(eyre!("Failed to get configured gatherers. {:?}", err)),
             },
             CliAction::Like {
-                like_all,
-                like_user,
+                all: like_all,
+                user: like_user,
             } => {
                 println!("Trying to like posts...");
                 log::debug!("Opts: {:?}, {:?}", like_all, like_user);
                 Ok(())
             }
             CliAction::Unlike {
-                like_all,
-                like_user,
+                all: like_all,
+                user: like_user,
             } => {
                 println!(
                     "Unliking posts [gatherers: {:?}; like_all: {:?}; like_user: {:?}];",
@@ -173,20 +173,18 @@ impl CliAction {
             }
             CliAction::Purchased => match get_available_gatherers(&conf, gatherers).await {
                 Ok(gatherers) => Ok(crate::cli_tasks::purchased(gatherers, &conf).await?),
-                Err(err) => Err(format!("Failed to get configured gatherers. {:?}", err).into()),
+                Err(err) => Err(eyre!("Failed to get configured gatherers. {:?}", err)),
             },
             CliAction::List => match get_available_gatherers(&conf, gatherers).await {
                 Ok(gatherers) => Ok(crate::cli_tasks::list(gatherers).await?),
-                Err(err) => Err(format!("Failed to get configured gatherers. {:?}", err).into()),
+                Err(err) => Err(eyre!("Failed to get configured gatherers. {:?}", err)),
             },
             CliAction::Transactions { user_names, format } => {
                 match get_available_gatherers(&conf, gatherers).await {
                     Ok(gatherers) => {
                         Ok(crate::cli_tasks::transactions(gatherers, user_names, format).await?)
                     }
-                    Err(err) => {
-                        Err(format!("Failed to get configured gatherers. {:?}", err).into())
-                    }
+                    Err(err) => Err(eyre!("Failed to get configured gatherers. {:?}", err)),
                 }
             }
         }

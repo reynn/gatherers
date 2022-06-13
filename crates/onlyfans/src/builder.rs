@@ -1,16 +1,15 @@
+use gatherer_core::http::{Method, Request, RequestBuilder, Response};
+use std::future::Future;
+use url::Url;
 use {
     crate::{constants, responses, structs, OnlyFans, OnlyFansConfig},
-    gatherer_core::{
-        http::{Client, Cookie},
-        Result,
-    },
+    gatherer_core::{http::Client, Result},
 };
 
 pub(crate) struct OnlyFansBuilder {
     config: OnlyFansConfig,
     dynamic_rule: Option<structs::DynamicRule>,
     http_client: Option<Client>,
-    cookie: Option<Cookie>,
 }
 
 impl OnlyFansBuilder {
@@ -19,7 +18,6 @@ impl OnlyFansBuilder {
             config,
             dynamic_rule: None,
             http_client: None,
-            cookie: None,
         }
     }
 }
@@ -29,11 +27,6 @@ impl OnlyFansBuilder {
         let config = self.config;
         let dynamic_rule = self.dynamic_rule.unwrap();
         let http_client = self.http_client.as_ref().unwrap();
-        let cookie = Cookie::parse(&config.cookie).unwrap();
-
-        log::debug!("Config cookie         : {:?}", cookie);
-        log::debug!("Config cookie session : {:?}", cookie.get("sess"));
-        log::debug!("Config cookie csrf    : {:?}", cookie.get("csrf"));
 
         // Handle init call
         let mut init_headers =
@@ -42,14 +35,19 @@ impl OnlyFansBuilder {
         init_headers.remove("user-id");
 
         async {
-            let init_response = http_client
-                .get(constants::INIT_URL, Some(init_headers))
-                .await;
+            let req = http_client
+                .request(Method::GET, constants::INIT_URL.parse::<Url>().unwrap())
+                .headers(init_headers)
+                .build()
+                .unwrap();
+            let init_response = http_client.execute(req).await;
+            // let init_response = http_client
+            //     .get(constants::INIT_URL, Some(init_headers))
+            //     .await;
 
             match init_response {
                 Ok(success) => {
-                    let success_headers =
-                        Cookie::parse(success.get_header("set-cookie").unwrap_or("")).unwrap();
+                    let success_headers = success.headers().get("set-cookie").unwrap();
 
                     log::debug!("'set-cookie' header: {:?}", success_headers)
                 }
@@ -62,11 +60,32 @@ impl OnlyFansBuilder {
         // Returns a ready to use OnlyFans gatherer
         let me_headers = crate::generate_request_headers(&config, constants::ME_URL, &dynamic_rule);
 
-        let curr_user: responses::MeResponse =
-            match http_client.get(constants::ME_URL, Some(me_headers)).await {
-                Ok(me) => me.as_json().await?,
-                Err(me_err) => return Err(me_err),
-            };
+        let curr_user: responses::MeResponse = match http_client
+            .execute(
+                http_client
+                    .request(Method::GET, constants::ME_URL.parse::<Url>().unwrap())
+                    .headers(me_headers)
+                    .build()
+                    .unwrap(),
+            )
+            .await
+        {
+            Ok(resp) => match resp.json().await {
+                Ok(me_json) => me_json,
+                Err(e) => {
+                    eyre::bail!(e);
+                }
+            },
+            Err(resp_err) => {
+                eyre::bail!(resp_err)
+            }
+        };
+        //
+        // let curr_user: responses::MeResponse =
+        //     match http_client.get(constants::ME_URL, Some(me_headers)).await {
+        //         Ok(me) => me.as_json().await?,
+        //         Err(me_err) => return Err(me_err),
+        //     };
 
         Ok(OnlyFans {
             config,
@@ -78,13 +97,6 @@ impl OnlyFansBuilder {
 
     pub fn add_http_client(&mut self, client: Client) -> &mut Self {
         self.http_client = Some(client);
-        self
-    }
-
-    pub fn parse_cookie_string(&mut self) -> &mut Self {
-        let cookie = String::from(&self.config.cookie);
-        let cookie = Cookie::parse(&cookie).expect("OnlyFans: provided `cookie` is invalid");
-        self.cookie = Some(cookie);
         self
     }
 

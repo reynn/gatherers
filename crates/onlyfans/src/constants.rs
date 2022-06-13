@@ -1,8 +1,8 @@
 pub const BASE_URL: &str = "https://onlyfans.com";
-pub const INIT_URL: &str = "/api2/v2/init";
+pub const INIT_URL: &str = "https://onlyfans.com/api2/v2/init";
 pub const DC_DYNAMIC_RULE: &str =
     "https://raw.githubusercontent.com/DATAHOARDERS/dynamic-rules/main/onlyfans.json";
-pub const ME_URL: &str = "/api2/v2/users/me";
+pub const ME_URL: &str = "https://onlyfans.com/api2/v2/users/me";
 // pub const SUBSCRIPTIONS_URL: &str =
 //     "/api2/v2/subscriptions/subscribes?limit={}&offset={}&type=active";
 // pub const LISTS_URL: &str = "/api2/v2/lists?limit=100&offset=0";

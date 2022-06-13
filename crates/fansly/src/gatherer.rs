@@ -1,3 +1,4 @@
+use eyre::{bail, eyre};
 use {
     crate::{
         structs::{self, MessageGroup},
@@ -167,11 +168,12 @@ impl Gatherer for Fansly {
                             media_ids_from_messages.append(&mut thread_media_ids);
                         }
                         Err(group_message_err) => {
-                            return Err(format!(
+                            bail!(
                                 "Failed to get messages for {}({}). {:#}",
-                                sub.name, thread.id, group_message_err
-                            )
-                            .into())
+                                sub.name,
+                                thread.id,
+                                group_message_err
+                            );
                         }
                     }
                 }
@@ -192,22 +194,20 @@ impl Gatherer for Fansly {
                             })
                             .collect())
                     }
-                    Err(media_err) => Err(format!(
+                    Err(media_err) => Err(eyre!(
                         "Failed to get media details for {} items for user {}. {:?}",
                         media_ids_from_messages.len(),
                         sub.name,
                         media_err,
-                    )
-                    .into()),
+                    )),
                 }
             }
-            Err(group_err) => Err(format!(
+            Err(group_err) => Err(eyre!(
                 "{}: Failed to get message groups for user {}. {}",
                 self.name(),
                 sub.name.username,
                 group_err
-            )
-            .into()),
+            )),
         }
     }
 
@@ -296,10 +296,10 @@ impl Gatherer for Fansly {
 pub fn to_gatherer_media(
     fansly_media: structs::Media,
     sub_name: &'_ str,
-) -> gatherer_core::Result<gatherer_core::gatherers::Media> {
+) -> Result<gatherer_core::gatherers::Media> {
     if let Some(details) = fansly_media.details {
         if details.locations.is_empty() {
-            return Err(format!("Content not available: {:?}", details).into());
+            return Err(eyre!("Content not available: {:?}", details));
         }
         let filename = details.file_name.unwrap_or_default();
         let original_file_path = Path::new(&filename);
@@ -309,7 +309,7 @@ pub fn to_gatherer_media(
             .extension()
             .map(|ext| format!(".{}", &ext.to_str().unwrap_or_default()))
             .unwrap_or_default();
-        Ok(gatherer_core::gatherers::Media {
+        Ok(Media {
             file_name,
             url: details.locations[0].location.to_string(),
             mime_type: details.mimetype,
@@ -317,6 +317,6 @@ pub fn to_gatherer_media(
             user_name: sub_name.to_string(),
         })
     } else {
-        Err(format!("Content not available: {:?}", fansly_media).into())
+        Err(eyre!("Content not available: {:?}", fansly_media))
     }
 }

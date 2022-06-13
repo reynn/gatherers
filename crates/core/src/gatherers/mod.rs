@@ -3,11 +3,10 @@
 //! A `Gatherer` is responsible for collect content from whatever source it chooses to implement.
 //! Initially this is designed around getting **PAID** content from subscription sites.
 
-mod errors;
 mod modifiers;
 pub mod structs;
 
-pub use self::{errors::GathererErrors, structs::*};
+pub use self::structs::*;
 use {
     crate::{downloaders::Downloadable, Result},
     async_channel::Sender,
@@ -21,74 +20,41 @@ pub trait Gatherer: Debug + Sync + Send {
     /// Interface with the source site to get the subscriptions of the authed user
     ///
     /// TODO: add more detail
-    async fn gather_subscriptions(&self) -> Result<Vec<structs::Subscription>>;
+    async fn gather_subscriptions(&self) -> Result<Vec<Subscription>>;
     /// Interface with the source site to get the specified subs bundles
     ///
     /// TODO: add more detail
-    async fn gather_media_from_bundles(
-        &self,
-        _sub: &'_ structs::Subscription,
-    ) -> Result<Vec<structs::Media>> {
-        Err(Box::new(GathererErrors::NotSupportedByGatherer {
-            gatherer_name: self.name().to_string(),
-            feature: "content_bundles".to_string(),
-        }))
+    async fn gather_media_from_bundles(&self, _sub: &'_ Subscription) -> Result<Vec<Media>> {
+        eyre::bail!("{} does not support `content_bundles`", self.name());
     }
     /// Interface with the source site to get the specified subs posts
     ///
     /// TODO: add more detail
-    async fn gather_media_from_posts(
-        &self,
-        _sub: &'_ structs::Subscription,
-    ) -> Result<Vec<structs::Media>> {
-        Err(Box::new(GathererErrors::NotSupportedByGatherer {
-            gatherer_name: self.name().to_string(),
-            feature: "posts".to_string(),
-        }))
+    async fn gather_media_from_posts(&self, _sub: &'_ Subscription) -> Result<Vec<Media>> {
+        eyre::bail!("{} does not support `posts`", self.name());
     }
     /// Interface with the source site to get the specified subs messages
     ///
     /// TODO: add more detail
-    async fn gather_media_from_messages(
-        &self,
-        _sub: &'_ structs::Subscription,
-    ) -> Result<Vec<structs::Media>> {
-        Err(Box::new(GathererErrors::NotSupportedByGatherer {
-            gatherer_name: self.name().to_string(),
-            feature: "messages".to_string(),
-        }))
+    async fn gather_media_from_messages(&self, _sub: &'_ Subscription) -> Result<Vec<Media>> {
+        eyre::bail!("{} does not support `messages`", self.name());
     }
     /// Interface with the source site to get the specified subs stories
     ///
     /// TODO: add more detail
-    async fn gather_media_from_stories(
-        &self,
-        _sub: &'_ structs::Subscription,
-    ) -> Result<Vec<structs::Media>> {
-        Err(Box::new(GathererErrors::NotSupportedByGatherer {
-            gatherer_name: self.name().to_string(),
-            feature: "stories".to_string(),
-        }))
+    async fn gather_media_from_stories(&self, _sub: &'_ Subscription) -> Result<Vec<Media>> {
+        eyre::bail!("{} does not support `stories`", self.name());
     }
     /// This should grab content that the user has paid for
     ///
     /// The user would be the currently authenticated user as provided by authorization token.
     /// Is likely to cause some duplicates from posts if the user is still subscribed.
     /// This is an acceptable scenario as the Downloader should be handling this case.
-    async fn gather_paid_content(&self) -> Result<Vec<structs::Media>> {
-        Err(Box::new(GathererErrors::NotSupportedByGatherer {
-            gatherer_name: self.name().to_string(),
-            feature: "paid content".to_string(),
-        }))
+    async fn gather_paid_content(&self) -> Result<Vec<Media>> {
+        eyre::bail!("{} does not support `paid content`", self.name());
     }
-    async fn gather_transaction_details(
-        &self,
-        _user_names: &[String],
-    ) -> Result<Vec<structs::Transaction>> {
-        Err(Box::new(GathererErrors::NotSupportedByGatherer {
-            gatherer_name: self.name().to_string(),
-            feature: "transactions".to_string(),
-        }))
+    async fn gather_transaction_details(&self, _user_names: &[String]) -> Result<Vec<Transaction>> {
+        eyre::bail!("{} does not support `transactions`", self.name());
     }
     /// Provide whether the gatherer should be considered enabled
     fn is_enabled(&self) -> bool {
@@ -107,7 +73,7 @@ pub enum GatherType {
     Purchased,
 }
 
-pub async fn run_gatherer(info: structs::GathererInfo) -> Result<()> {
+pub async fn run_gatherer(info: GathererInfo) -> Result<()> {
     let gatherer_name = info.name;
     let gather_type = info.gather_type;
     let sub = info.subscription;
@@ -175,7 +141,8 @@ pub async fn run_gatherer(info: structs::GathererInfo) -> Result<()> {
                 gatherer_name, gather_type, gather_err
             );
             log::error!("{}", err_msg);
-            Err(err_msg.into())
+            Err(eyre::eyre!(err_msg))
+            // Err(err_msg.into())
         }
     }
 }

@@ -4,22 +4,23 @@ mod gatherer;
 mod responses;
 mod structs;
 
+use eyre::{bail, eyre};
+use gatherer_core::http;
 use {
     crate::{
         builder::OnlyFansBuilder,
         structs::{DynamicRule, ListUser},
     },
     gatherer_core::{
-        gatherers::GathererErrors,
-        http::{Client, ClientConfig, Headers, Url},
+        http::{
+            header::{HeaderMap, HeaderValue},
+            Client, ClientConfig, Method, Request, Url,
+        },
         Result,
     },
     serde::{Deserialize, Serialize},
     sha1::{Digest, Sha1},
-    std::{
-        collections::HashMap,
-        time::{SystemTime, UNIX_EPOCH},
-    },
+    std::time::{SystemTime, UNIX_EPOCH},
 };
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -36,7 +37,7 @@ pub struct OnlyFansConfig {
 #[derive(Debug)]
 pub struct OnlyFans {
     config: OnlyFansConfig,
-    dynamic_rule: structs::DynamicRule,
+    dynamic_rule: DynamicRule,
     http_client: Client,
     authed_user: structs::Me,
 }
@@ -45,58 +46,68 @@ pub struct OnlyFans {
 impl OnlyFans {
     pub async fn new(of_conf: OnlyFansConfig) -> Result<OnlyFans> {
         if !of_conf.enabled {
-            return Err(Box::new(GathererErrors::NotEnabled {
-                name: String::from("OnlyFans"),
-            }));
+            bail!("OnlyFans is not enabled");
         }
 
-        let http_client = Client::new(ClientConfig {
-            base_url: Some(constants::BASE_URL.to_string()),
+        let http_client = http::new(ClientConfig {
+            base_url: Some(constants::BASE_URL),
+            cookies: Some(&of_conf.cookie),
         });
 
         let mut ofb = OnlyFansBuilder::new(of_conf);
         ofb.with_dynamic_rule(get_dc_dynamic_rule(&http_client).await?);
         ofb.add_http_client(http_client);
-        ofb.parse_cookie_string();
-        Ok(ofb.build().await?)
+        ofb.build().await
     }
 }
 
-fn generate_request_headers(
-    config: &'_ OnlyFansConfig,
+fn generate_request_headers<'a>(
+    config: &'a OnlyFansConfig,
     path: &'_ str,
-    dynamic_rule: &'_ DynamicRule,
-) -> Headers {
-    let cookie = &config.cookie;
+    dynamic_rule: &'a DynamicRule,
+) -> HeaderMap {
+    let mut h = HeaderMap::new();
+    h.insert(
+        "accept",
+        HeaderValue::from_static("application/json, text/plain, */*"),
+    );
+    let token = match &config.app_token {
+        None => &dynamic_rule.app_token,
+        Some(t) => t,
+    };
 
-    let mut h = HashMap::new();
+    h.insert("app-token", HeaderValue::from_str(token).unwrap());
+    h.insert("x-bc", HeaderValue::from_str(&config.x_bc).unwrap());
+    h.insert("referer", HeaderValue::from_static("https://onlyfans.com"));
     h.insert(
-        "accept".to_string(),
-        "application/json, text/plain, */*".to_string(),
+        "user-agent",
+        HeaderValue::from_str(&config.user_agent).unwrap(),
     );
-    h.insert(
-        "app-token".to_string(),
-        match config.app_token.clone() {
-            Some(token) => token,
-            None => dynamic_rule.app_token.clone(),
-        },
-    );
-    h.insert("x-bc".to_string(), config.x_bc.to_string());
-    h.insert("referer".to_string(), "https://onlyfans.com".to_string());
-    h.insert("user-agent".to_string(), config.user_agent.to_string());
-    h.insert("cookie".to_string(), cookie.to_string());
-    h.insert("user-id".to_string(), config.auth_id.to_string());
+    h.insert("cookie", HeaderValue::from_str(&config.cookie).unwrap());
+    h.insert("user-id", HeaderValue::from_str(&config.auth_id).unwrap());
 
     // Add the necessary signed headers
     let (signed, epoch_time) = create_signed_headers(path, &config.auth_id, dynamic_rule);
-    h.insert("sign".to_string(), signed);
-    h.insert("time".to_string(), epoch_time);
+    h.insert("sign", HeaderValue::from_str(&signed).unwrap());
+    h.insert("time", HeaderValue::from_str(&epoch_time).unwrap());
 
     h
 }
 
 /// Impl block for OnlyFans API calls
 impl OnlyFans {
+    fn create_req(&self, method: Method, endpoint: &'_ str) -> http::Request {
+        self.http_client
+            .request(method, endpoint.parse::<Url>().unwrap())
+            .headers(generate_request_headers(
+                &self.config,
+                endpoint,
+                &self.dynamic_rule,
+            ))
+            .build()
+            .unwrap()
+    }
+
     async fn get_subscriptions(
         &self,
         sub_status: Option<&'_ str>,
@@ -107,23 +118,13 @@ impl OnlyFans {
 
         while more_pages {
             let endpoint = if let Some(status) = sub_status {
-                format!("/api2/v2/subscriptions/subscribes?offset={offset}&type={status}&sort=desc&field=expire_date&limit=10")
+                format!("{}/api2/v2/subscriptions/subscribes?offset={offset}&type={status}&sort=desc&field=expire_date&limit=10", constants::BASE_URL)
             } else {
-                format!("/api2/v2/subscriptions/subscribes?offset={offset}&sort=desc&field=expire_date&limit=10")
+                format!("{}/api2/v2/subscriptions/subscribes?offset={offset}&sort=desc&field=expire_date&limit=10", constants::BASE_URL)
             };
-            if let Ok(partial_subs) = self
-                .http_client
-                .get(
-                    &endpoint,
-                    Some(crate::generate_request_headers(
-                        &self.config,
-                        &endpoint,
-                        &self.dynamic_rule,
-                    )),
-                )
-                .await
-            {
-                let subs: responses::SubscriptionResponse = partial_subs.as_json().await?;
+            let req = self.create_req(Method::GET, &endpoint);
+            if let Ok(partial_subs) = self.http_client.execute(req).await {
+                let subs: responses::SubscriptionResponse = partial_subs.json().await?;
                 if subs.len() < 10 {
                     more_pages = false;
                 }
@@ -148,24 +149,16 @@ impl OnlyFans {
 
         while has_more {
             let endpoint = format!(
-                "/api2/v2/posts/paid?limit=10&skip_users=all&format=infinite&offset={}",
+                "{}/api2/v2/posts/paid?limit=10&skip_users=all&format=infinite&offset={}",
+                constants::BASE_URL,
                 offset
             );
-            match self
-                .http_client
-                .get(
-                    &endpoint,
-                    Some(crate::generate_request_headers(
-                        &self.config,
-                        &endpoint,
-                        &self.dynamic_rule,
-                    )),
-                )
-                .await
-            {
+            let req = self.create_req(Method::GET, &endpoint);
+
+            match self.http_client.execute(req).await {
                 Ok(response) => {
-                    let purchases_response: Result<responses::PurchasedItemsResponse> =
-                        response.as_json().await;
+                    let purchases_response: http::Result<responses::PurchasedItemsResponse> =
+                        response.json().await;
                     match purchases_response {
                         Ok(mut purchases) => {
                             paid_content.append(&mut purchases.list);
@@ -197,22 +190,14 @@ impl OnlyFans {
 
         // Get pinned posts for user
         let endpoint = format!(
-            "/api2/v2/users/{user_id}/posts?skip_users=all&pinned=1&counters=0&format=infinite"
+            "{}/api2/v2/users/{user_id}/posts?skip_users=all&pinned=1&counters=0&format=infinite",
+            constants::BASE_URL
         );
-        match self
-            .http_client
-            .get(
-                &endpoint,
-                Some(crate::generate_request_headers(
-                    &self.config,
-                    &endpoint,
-                    &self.dynamic_rule,
-                )),
-            )
-            .await
-        {
+        let req = self.create_req(Method::GET, &endpoint);
+
+        match self.http_client.execute(req).await {
             Ok(posts_response) => {
-                let response: Result<responses::PostsResponse> = posts_response.as_json().await;
+                let response: http::Result<responses::PostsResponse> = posts_response.json().await;
                 match response {
                     Ok(mut pinned_posts) => posts.append(&mut pinned_posts.list),
                     Err(pinned_err) => {
@@ -220,31 +205,22 @@ impl OnlyFans {
                     }
                 }
             }
-            Err(response_err) => return Err(response_err),
+            Err(response_err) => return Err(eyre!(response_err)),
         }
 
         let mut last_pub_time: Option<String> = None;
 
         loop {
             let endpoint = if let Some(pub_time) = last_pub_time {
-                format!("/api2/v2/users/{user_id}/posts?limit=10&order=publish_date_desc&skip_users=all&pinned=0&format=infinite&beforePublishTime={pub_time}")
+                format!("{}/api2/v2/users/{user_id}/posts?limit=10&order=publish_date_desc&skip_users=all&pinned=0&format=infinite&beforePublishTime={pub_time}", constants::BASE_URL)
             } else {
-                format!("/api2/v2/users/{user_id}/posts?limit=10&order=publish_date_desc&skip_users=all&pinned=0&format=infinite")
+                format!("{}/api2/v2/users/{user_id}/posts?limit=10&order=publish_date_desc&skip_users=all&pinned=0&format=infinite", constants::BASE_URL)
             };
-            match self
-                .http_client
-                .get(
-                    &endpoint,
-                    Some(crate::generate_request_headers(
-                        &self.config,
-                        &endpoint,
-                        &self.dynamic_rule,
-                    )),
-                )
-                .await
-            {
+            let req = self.create_req(Method::GET, &endpoint);
+
+            match self.http_client.execute(req).await {
                 Ok(posts_response) => {
-                    let mut response: responses::PostsResponse = posts_response.as_json().await?;
+                    let mut response: responses::PostsResponse = posts_response.json().await?;
                     if !response.has_more {
                         break;
                     } else {
@@ -256,7 +232,7 @@ impl OnlyFans {
                     }
                     posts.append(&mut response.list);
                 }
-                Err(response_err) => return Err(response_err),
+                Err(response_err) => return Err(eyre!(response_err)),
             }
         }
 
@@ -270,25 +246,18 @@ impl OnlyFans {
 
         loop {
             let endpoint = match last_message_id {
-                None => format!("/api2/v2/chats/{user_id}/messages?limit=10&offset=0&order=desc&skip_users=all"),
-                Some(message_id) => format!("/api2/v2/chats/{user_id}/messages?limit=10&offset=0&id={message_id}&order=desc&skip_users=all")
+                None => format!("{}/api2/v2/chats/{user_id}/messages?limit=10&offset=0&order=desc&skip_users=all", constants::BASE_URL),
+                Some(message_id) => format!("{}/api2/v2/chats/{user_id}/messages?limit=10&offset=0&id={message_id}&order=desc&skip_users=all", constants::BASE_URL)
             };
 
             match self
                 .http_client
-                .get(
-                    &endpoint,
-                    Some(crate::generate_request_headers(
-                        &self.config,
-                        &endpoint,
-                        &self.dynamic_rule,
-                    )),
-                )
+                .execute(self.create_req(Method::GET, &endpoint))
                 .await
             {
                 Ok(success_response) => {
-                    let msg_success: Result<crate::responses::MessagesResponse> =
-                        success_response.as_json().await;
+                    let msg_success: http::Result<responses::MessagesResponse> =
+                        success_response.json().await;
                     match msg_success {
                         Ok(curr_messages) => {
                             let authed_user_id = self.authed_user.id;
@@ -318,7 +287,7 @@ impl OnlyFans {
                                 "Failed to convert message response into JSON: {:?}",
                                 as_json_err
                             );
-                            return Err(as_json_err);
+                            return Err(eyre!(as_json_err));
                         }
                     }
                 }
@@ -328,7 +297,7 @@ impl OnlyFans {
                         user_id,
                         error_response
                     );
-                    return Err(error_response);
+                    return Err(eyre!(error_response));
                 }
             }
         }
@@ -337,33 +306,32 @@ impl OnlyFans {
     }
 
     async fn get_user_stories(&self, user_id: &str) -> Result<Vec<structs::Story>> {
-        let endpoint = format!("/api2/v2/users/{user_id}/stories?unf=1");
+        let endpoint = format!(
+            "{}/api2/v2/users/{user_id}/stories?unf=1",
+            constants::BASE_URL
+        );
         match self
             .http_client
-            .get(
-                &endpoint,
-                Some(crate::generate_request_headers(
-                    &self.config,
-                    &endpoint,
-                    &self.dynamic_rule,
-                )),
-            )
+            .execute(self.create_req(Method::GET, &endpoint))
             .await
         {
             Ok(success_resp) => {
-                let user_stories: Result<responses::StoriesResponse> = success_resp.as_json().await;
+                let user_stories: http::Result<responses::StoriesResponse> =
+                    success_resp.json().await;
                 match user_stories {
-                    Ok(all_stories) => {
-                        Ok(all_stories)
-                    }
-                    Err(invalid_json_err) => {
-                        Err(format!("Got user stories for {user_id} but unable to convert to JSON. {invalid_json_err}").into())
-                    }
+                    Ok(all_stories) => Ok(all_stories),
+                    Err(invalid_json_err) => Err(eyre!(
+                        "Got user stories for {} but unable to convert to JSON. {}",
+                        user_id,
+                        invalid_json_err
+                    )),
                 }
             }
-            Err(err_resp) => {
-                Err(format!("Failed to get stories for user {user_id}. {err_resp}").into())
-            }
+            Err(err_resp) => Err(eyre!(
+                "Failed to get stories for user {}. {}",
+                user_id,
+                err_resp
+            )),
         }
     }
 
@@ -374,26 +342,25 @@ impl OnlyFans {
 
         while has_more {
             let endpoint = if let Some(marker) = marker {
-                format!("/api2/v2/payments/all/transactions?limit=10&marker={marker}&type=payment")
+                format!(
+                    "{}/api2/v2/payments/all/transactions?limit=10&marker={marker}&type=payment",
+                    constants::BASE_URL
+                )
             } else {
-                "/api2/v2/payments/all/transactions?limit=10&type=payment".into()
+                format!(
+                    "{}/api2/v2/payments/all/transactions?limit=10&type=payment",
+                    constants::BASE_URL
+                )
             };
 
             match self
                 .http_client
-                .get(
-                    &endpoint,
-                    Some(crate::generate_request_headers(
-                        &self.config,
-                        &endpoint,
-                        &self.dynamic_rule,
-                    )),
-                )
+                .execute(self.create_req(Method::GET, &endpoint))
                 .await
             {
                 Ok(success_resp) => {
-                    let available_transactions: Result<responses::TransactionsResponse> =
-                        success_resp.as_json().await;
+                    let available_transactions: http::Result<responses::TransactionsResponse> =
+                        success_resp.json().await;
                     match available_transactions {
                         Ok(mut available_transactions) => {
                             has_more = available_transactions.has_more;
@@ -410,7 +377,7 @@ impl OnlyFans {
                 }
                 Err(transaction_err) => {
                     log::error!("{:?}", transaction_err);
-                    return Err(transaction_err);
+                    bail!(transaction_err);
                 }
             }
         }
@@ -420,7 +387,8 @@ impl OnlyFans {
 
     async fn get_users_by_id(&self, user_ids: &[i64]) -> Result<Vec<ListUser>> {
         let endpoint = format!(
-            "/api2/v2/users/list?{}",
+            "{}/api2/v2/users/list?{}",
+            constants::BASE_URL,
             user_ids
                 .iter()
                 .map(|user_id| format!("t[]={}", user_id))
@@ -430,32 +398,24 @@ impl OnlyFans {
 
         match self
             .http_client
-            .get(
-                &endpoint,
-                Some(crate::generate_request_headers(
-                    &self.config,
-                    &endpoint,
-                    &self.dynamic_rule,
-                )),
-            )
+            .execute(self.create_req(Method::GET, &endpoint))
             .await
         {
             Ok(response) => {
-                let users: Result<responses::ListOfUsersResponse> = response.as_json().await;
+                let users: http::Result<responses::ListOfUsersResponse> = response.json().await;
                 match users {
                     Ok(users_list) => Ok(users_list.into_iter().map(|(_, user)| user).collect()),
-                    Err(json_err) => Err(json_err),
+                    Err(json_err) => Err(eyre!(json_err)),
                 }
             }
-            Err(http_err) => Err(http_err),
+            Err(http_err) => Err(eyre!(http_err)),
         }
     }
 }
 
-async fn get_dc_dynamic_rule(api_client: &'_ Client) -> Result<DynamicRule> {
-    let url = Url::parse(constants::DC_DYNAMIC_RULE).unwrap();
-    let resp = api_client.get(&url, None).await?;
-    Ok(resp.as_json().await?)
+async fn get_dc_dynamic_rule(api_client: &'_ Client) -> http::Result<DynamicRule> {
+    let req = api_client.get(constants::DC_DYNAMIC_RULE).build()?;
+    api_client.execute(req).await?.json().await
 }
 
 fn create_signed_headers(

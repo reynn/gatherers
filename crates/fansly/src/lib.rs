@@ -4,11 +4,15 @@ mod responses;
 mod structs;
 
 pub use self::gatherer::*;
+use eyre::eyre;
+use gatherer_core::http::header::{HeaderMap, HeaderValue};
+use gatherer_core::http::{Method, Url};
 use {
     chrono::prelude::*,
+    eyre::bail,
     gatherer_core::{
-        gatherers::{self, Gatherer, GathererErrors, Subscription, SubscriptionName},
-        http::{self, Client, ClientConfig, Headers},
+        gatherers::{self, Gatherer, Subscription, SubscriptionName},
+        http::{self, Client, ClientConfig},
         Result,
     },
     regex::Regex,
@@ -33,22 +37,30 @@ pub struct Fansly {
 impl Fansly {
     pub async fn new(fansly_conf: FanslyConfig) -> Result<Fansly> {
         if !fansly_conf.enabled {
-            return Err(Box::new(GathererErrors::NotEnabled {
-                name: String::from("Fansly"),
-            }));
+            bail!("Fansly is not enabled");
         };
 
         let api_config = ClientConfig {
-            base_url: Some(constants::BASE_URL.to_string()),
+            base_url: Some(constants::BASE_URL),
+            cookies: None,
         };
+
         let s = Self {
-            http_client: Client::new(api_config),
+            http_client: http::new(api_config),
             conf: fansly_conf,
         };
         match s.validate_auth_token().await {
             Ok(_) => Ok(s),
             Err(e) => Err(e),
         }
+    }
+
+    fn create_req_with_headers(&self, method: Method, endpoint: &'_ str) -> http::Request {
+        self.http_client
+            .request(method, endpoint.parse::<Url>().unwrap())
+            .headers(self.get_default_headers().unwrap())
+            .build()
+            .unwrap()
     }
 
     pub async fn get_user_accounts_by_names(
@@ -60,47 +72,43 @@ impl Fansly {
             constants::USER_ACCOUNT_URL,
             names.join(",")
         );
-        let resp = self.http_client.get(&endpoint, None).await;
+        let resp = self
+            .http_client
+            .execute(self.create_req_with_headers(Method::GET, &endpoint))
+            .await;
         match resp {
             Ok(out) => {
-                let out: Result<responses::AccountsResponse> = out.as_json().await;
+                let out: http::Result<responses::AccountsResponse> = out.json().await;
                 match out {
                     Ok(ret_val) => Ok(ret_val.response),
-                    Err(json_err) => Err(format!(
+                    Err(json_err) => Err(eyre!(
                         "Failed to convert to JSON from {}. {:?}",
-                        &endpoint, json_err
-                    )
-                    .into()),
+                        &endpoint,
+                        json_err
+                    )),
                 }
             }
-            Err(bundles_err) => Err(bundles_err),
+            Err(bundles_err) => Err(eyre!(bundles_err)),
         }
     }
 
     pub async fn validate_auth_token(&self) -> Result<&Fansly> {
         if self.conf.auth_token.is_empty() {
-            return Err(Box::new(GathererErrors::InvalidCredentials {
-                name: "Fansly".into(),
-                msg: "Cannot be used without an auth token.".into(),
-            }));
+            bail!("Fansly requires an auth token");
         };
         let resp = self
             .http_client
-            .post(
-                constants::STATUS_URL,
-                self.get_default_headers(),
-                Some(http::json!([("statusId", 1)])),
-            )
+            .execute(self.create_req_with_headers(Method::POST, constants::STATUS_URL))
             .await?;
         log::debug!("validate_auth_token: {:?}", resp);
         Ok(self)
     }
 
-    fn get_default_headers(&self) -> Option<Headers> {
-        let mut hm = HashMap::new();
+    fn get_default_headers(&self) -> Option<HeaderMap> {
+        let mut hm = HeaderMap::new();
         hm.insert(
-            "Authorization".to_string(),
-            self.conf.auth_token.to_string(),
+            http::header::AUTHORIZATION,
+            HeaderValue::from_str(&self.conf.auth_token).unwrap(),
         );
         Some(hm)
     }
@@ -117,8 +125,11 @@ impl Fansly {
             constants::USER_ACCOUNT_URL,
             account_ids.join(",")
         );
-        let resp = self.http_client.get(&endpoint, None).await?;
-        Ok(resp.as_json().await?)
+        let resp = self
+            .http_client
+            .execute(self.create_req_with_headers(Method::GET, &endpoint))
+            .await?;
+        Ok(resp.json().await?)
     }
 
     pub async fn get_media_by_ids(&self, media_ids: &[String]) -> Result<Vec<structs::Media>> {
@@ -131,11 +142,11 @@ impl Fansly {
             let endpoint = format!("{}?ids={}", constants::MEDIA_URL, ids_chunked.join(","));
             let media = self
                 .http_client
-                .get(&endpoint, self.get_default_headers())
+                .execute(self.create_req_with_headers(Method::GET, &endpoint))
                 .await;
             match media {
                 Ok(response) => {
-                    let mut response: responses::MediaResponse = response.as_json().await?;
+                    let mut response: responses::MediaResponse = response.json().await?;
                     log::trace!("Media Response {:?}\n", response.response);
                     returned_media.append(&mut response.response);
                     // Some(response.response)
@@ -160,15 +171,15 @@ impl Fansly {
         );
         let bundles = self
             .http_client
-            .get(&endpoint, self.get_default_headers())
+            .execute(self.create_req_with_headers(Method::GET, &endpoint))
             .await;
         match bundles {
             Ok(bundles_response) => {
                 let bundles_response: responses::MediaBundleResponse =
-                    bundles_response.as_json().await?;
+                    bundles_response.json().await?;
                 Ok(bundles_response.response)
             }
-            Err(bundles_err) => Err(bundles_err),
+            Err(bundles_err) => Err(eyre!(bundles_err)),
         }
     }
 
@@ -190,11 +201,11 @@ impl Fansly {
             log::debug!("Endpoint: [{}]", endpoint);
             let response = self
                 .http_client
-                .get(&endpoint, self.get_default_headers())
+                .execute(self.create_req_with_headers(Method::GET, &endpoint))
                 .await;
             match response {
                 Ok(post_response) => {
-                    let post_response: responses::PostsResponse = post_response.as_json().await?;
+                    let post_response: responses::PostsResponse = post_response.json().await?;
                     if post_response.response.account_media.is_none()
                         && post_response.response.account_media_bundles.is_none()
                         && post_response.response.aggregated_posts.is_none()
@@ -215,7 +226,7 @@ impl Fansly {
                         posts.push(post_response.response);
                     }
                 }
-                Err(err) => return Err(err),
+                Err(err) => bail!(err),
             }
         }
 
@@ -226,12 +237,12 @@ impl Fansly {
         let endpoint = constants::SUBS_URL;
         let subs = self
             .http_client
-            .get(&endpoint, self.get_default_headers())
+            .execute(self.create_req_with_headers(Method::GET, &endpoint))
             .await;
         log::debug!("Subs response: {:?}", subs);
         match subs {
             Ok(resp) => {
-                let resp: responses::SubscriptionResponse = resp.as_json().await?;
+                let resp: responses::SubscriptionResponse = resp.json().await?;
                 if resp.success {
                     let mut sub_account_ids: Vec<String> = resp
                         .response
@@ -281,53 +292,43 @@ impl Fansly {
                         }
                     }
                 } else {
-                    log::error!("Response from Fansly failed, {:?}", resp);
-                    Err(Box::new(GathererErrors::NoSubscriptionsFound {
-                        gatherer: self.name().to_string(),
-                        data: format!("{:?}", resp.response),
-                    }))
+                    Err(eyre!(
+                        "No subscriptions found for Fansly. {:?}",
+                        resp.response
+                    ))
                 }
             }
-            Err(resp_err) => {
-                log::error!("Response from  {:?}", resp_err);
-                Err(resp_err)
-            }
+            Err(resp_err) => Err(eyre!(resp_err)),
         }
     }
 
     pub async fn get_messages_groups(&self) -> Result<Vec<structs::MessageGroup>> {
-        let re = Regex::new(r#"(\\u.*?)( |\.\.\.)"#).unwrap();
         let endpoint = constants::MESSAGE_GROUPS_URL;
         let all_groups_resp = self
             .http_client
-            .get(&endpoint, self.get_default_headers())
+            .execute(self.create_req_with_headers(Method::GET, &endpoint))
             .await;
         match all_groups_resp {
             Ok(resp) => {
-                let groups: responses::MessageGroupsResponse =
-                    resp.as_json_with_strip(Some(&re)).await?;
+                let groups: responses::MessageGroupsResponse = resp.json().await?;
                 Ok(groups.response.groups)
             }
-            Err(groups_err) => {
-                Err(format!("Error getting message groups: {:?}", groups_err).into())
-            }
+            Err(groups_err) => Err(eyre!("Error getting message groups: {:?}", groups_err)),
         }
     }
 
     pub async fn get_followed_accounts_stubs(&self) -> Result<Vec<structs::FollowedAccount>> {
-        let re = Regex::new(r#"(\\u.*?)( |\.\.\.)"#).unwrap();
         let endpoint = format!("{}?limit={}&offset=0", constants::MEDIA_BUNDLE_URL, 100);
         let followed = self
             .http_client
-            .get(&endpoint, self.get_default_headers())
+            .execute(self.create_req_with_headers(Method::GET, &endpoint))
             .await;
         match followed {
             Ok(resp) => {
-                let accounts: responses::FollowedAccountsResponse =
-                    resp.as_json_with_strip(Some(&re)).await?;
+                let accounts: responses::FollowedAccountsResponse = resp.json().await?;
                 Ok(accounts.response)
             }
-            Err(resp_err) => Err(resp_err),
+            Err(resp_err) => Err(eyre!(resp_err)),
         }
     }
 
@@ -335,14 +336,14 @@ impl Fansly {
         let endpoint = format!("{}?accountId={}", constants::USER_STORIES_URL, account_id);
         let stories = self
             .http_client
-            .get(&endpoint, self.get_default_headers())
+            .execute(self.create_req_with_headers(Method::GET, &endpoint))
             .await;
         match stories {
             Ok(resp) => {
-                let stories: responses::AccountStoriesResponse = resp.as_json().await?;
+                let stories: responses::AccountStoriesResponse = resp.json().await?;
                 Ok(stories.response)
             }
-            Err(resp_err) => Err(resp_err),
+            Err(resp_err) => Err(eyre!(resp_err)),
         }
     }
 
@@ -373,13 +374,12 @@ impl Fansly {
             };
             let resp_res = self
                 .http_client
-                .get(&endpoint, self.get_default_headers())
+                .execute(self.create_req_with_headers(Method::GET, &endpoint))
                 .await;
 
             match resp_res {
                 Ok(resp) => {
-                    let mut group_messages: responses::GroupMessagesResponse =
-                        resp.as_json().await?;
+                    let mut group_messages: responses::GroupMessagesResponse = resp.json().await?;
                     log::debug!(
                         "Response for thread {}. {:?}",
                         group_id,
@@ -419,13 +419,13 @@ impl Fansly {
             );
             let result = self
                 .http_client
-                .get(&endpoint, self.get_default_headers())
+                .execute(self.create_req_with_headers(Method::GET, &endpoint))
                 .await;
 
             match result {
                 Ok(resp) => {
-                    let transactions: Result<responses::WalletTransactionsResponse> =
-                        resp.as_json().await;
+                    let transactions: http::Result<responses::WalletTransactionsResponse> =
+                        resp.json().await;
                     match transactions {
                         Ok(mut transactions) => {
                             offset += transactions.response.data.len();

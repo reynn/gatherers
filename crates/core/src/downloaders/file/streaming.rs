@@ -1,4 +1,4 @@
-use {crate::Result, async_trait::async_trait, surf::http::headers::HeaderValue};
+use {crate::Result, async_trait::async_trait, reqwest::header::HeaderValue};
 
 pub struct StreamingFileDownloader;
 
@@ -22,7 +22,7 @@ impl PartialRangeIter {
     #[allow(unused)]
     pub fn new(start: u64, end: u64, buffer_size: u32) -> Result<Self> {
         if buffer_size == 0 {
-            return Err("invalid buffer_size, give a value greater than zero.".into());
+            eyre::bail!("invalid buffer_size, give a value greater than zero.");
         }
         Ok(PartialRangeIter {
             start,
@@ -41,8 +41,7 @@ impl Iterator for PartialRangeIter {
             let prev_start = self.start;
             self.start += std::cmp::min(self.buffer_size as u64, self.end - self.start + 1);
             let hs = format!("bytes={}-{}", prev_start, self.start - 1);
-            let hs_bytes = hs.as_bytes().to_vec();
-            match HeaderValue::from_bytes(hs_bytes) {
+            match HeaderValue::from_bytes(hs.as_bytes()) {
                 Ok(hv) => {
                     log::debug!("{{PartialRangeIter}}: sent a header `{:?}`", hv);
                     Some(hv)

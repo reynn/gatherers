@@ -6,6 +6,7 @@ version = "0.1.0"
 [dependencies]
 async-trait   = "0.1"
 chrono        = "0.4"
+eyre          = "0.6"
 gatherer-core = { path = "../core" }
 log           = "0.4"
 regex         = "1.5"

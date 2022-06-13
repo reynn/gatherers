@@ -1,3 +1,4 @@
+use eyre::eyre;
 use {
     async_trait::async_trait,
     gatherer_core::{
@@ -48,11 +49,11 @@ impl Gatherer for crate::OnlyFans {
 
                 Ok(media)
             }
-            Err(posts_err) => Err(format!(
+            Err(posts_err) => Err(eyre!(
                 "Failed to get posts for user {}. {:?}",
-                sub.name.username, posts_err
-            )
-            .into()),
+                sub.name.username,
+                posts_err
+            )),
         }
     }
 
@@ -79,11 +80,11 @@ impl Gatherer for crate::OnlyFans {
                 }
                 Ok(media)
             }
-            Err(messages_err) => Err(format!(
+            Err(messages_err) => Err(eyre!(
                 "Failed to get messages for user: {}. {:?}",
-                sub.name.username, messages_err
-            )
-            .into()),
+                sub.name.username,
+                messages_err
+            )),
         }
     }
 
