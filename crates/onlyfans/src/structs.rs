@@ -5,7 +5,7 @@ use {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Subscription {
-    pub view: String,
+    pub view: Option<String>,
     pub avatar: Option<String>,
     #[serde(rename = "avatarThumbs")]
     pub avatar_thumbs: Option<AvatarThumbs>,
@@ -14,8 +14,8 @@ pub struct Subscription {
     pub header_size: Option<HeaderSize>,
     #[serde(rename = "headerThumbs")]
     pub header_thumbs: Option<HeaderThumbs>,
-    pub id: i64,
-    pub name: String,
+    pub id: Option<i64>,
+    pub name: Option<String>,
     pub username: String,
     #[serde(rename = "canLookStory")]
     pub can_look_story: Option<bool>,
@@ -65,7 +65,7 @@ pub struct Subscription {
     #[serde(rename = "subscribedByExpire")]
     pub subscribed_by_expire: Option<bool>,
     #[serde(rename = "subscribedByExpireDate")]
-    pub subscribed_by_expire_date: String,
+    pub subscribed_by_expire_date: Option<String>,
     #[serde(rename = "subscribedByAutoprolong")]
     pub subscribed_by_autoprolong: Option<bool>,
     #[serde(rename = "subscribedIsExpiredNow")]
@@ -105,10 +105,10 @@ pub struct Subscription {
 impl From<Subscription> for gatherer_core::gatherers::Subscription {
     fn from(of_sub: Subscription) -> Self {
         Self {
-            id: of_sub.id.to_string(),
+            id: of_sub.id.unwrap_or_default().to_string(),
             name: SubscriptionName {
                 username: of_sub.username,
-                display_name: Some(of_sub.name),
+                display_name: of_sub.name,
             },
             plan: "paid".into(),
             started: None,
@@ -129,17 +129,17 @@ pub struct DynamicRule {
     pub checksum_indexes: Vec<usize>,
     pub error_code: u32,
     pub format: String,
-    pub message: String,
+    pub message: Option<String>,
     pub remove_headers: Vec<String>,
     pub static_param: String,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Me {
-    pub view: String,
-    pub id: i64,
-    pub name: String,
-    pub username: String,
+    pub view: Option<String>,
+    pub id: Option<i64>,
+    pub name: Option<String>,
+    pub username: Option<String>,
     #[serde(rename = "canLookStory")]
     pub can_look_story: Option<bool>,
     #[serde(rename = "canCommentStory")]
@@ -159,44 +159,44 @@ pub struct Me {
     #[serde(rename = "canSendChatToAll")]
     pub can_send_chat_to_all: Option<bool>,
     #[serde(rename = "creditsMin")]
-    pub credits_min: i64,
+    pub credits_min: Option<i64>,
     #[serde(rename = "creditsMax")]
-    pub credits_max: i64,
+    pub credits_max: Option<i64>,
     #[serde(rename = "isPaywallRestriction")]
     pub is_paywall_restriction: Option<bool>,
     pub unprofitable: Option<bool>,
     #[serde(rename = "listsSort")]
-    pub lists_sort: String,
+    pub lists_sort: Option<String>,
     #[serde(rename = "listsSortOrder")]
-    pub lists_sort_order: String,
+    pub lists_sort_order: Option<String>,
     #[serde(rename = "canCreateLists")]
     pub can_create_lists: Option<bool>,
     #[serde(rename = "joinDate")]
-    pub join_date: String,
+    pub join_date: Option<String>,
     #[serde(rename = "isReferrerAllowed")]
     pub is_referrer_allowed: Option<bool>,
-    pub about: String,
+    pub about: Option<String>,
     #[serde(rename = "rawAbout")]
-    pub raw_about: String,
+    pub raw_about: Option<String>,
     // pub website: Option<serde_json::Value>,
     // pub wishlist: Option<serde_json::Value>,
     // pub location: Option<serde_json::Value>,
     #[serde(rename = "postsCount")]
-    pub posts_count: i64,
+    pub posts_count: Option<i64>,
     #[serde(rename = "archivedPostsCount")]
-    pub archived_posts_count: i64,
+    pub archived_posts_count: Option<i64>,
     #[serde(rename = "photosCount")]
-    pub photos_count: i64,
+    pub photos_count: Option<i64>,
     #[serde(rename = "videosCount")]
-    pub videos_count: i64,
+    pub videos_count: Option<i64>,
     #[serde(rename = "audiosCount")]
-    pub audios_count: i64,
+    pub audios_count: Option<i64>,
     #[serde(rename = "mediasCount")]
-    pub medias_count: i64,
+    pub medias_count: Option<i64>,
     #[serde(rename = "favoritesCount")]
     pub favorites_count: Option<i64>,
     #[serde(rename = "favoritedCount")]
-    pub favorited_count: i64,
+    pub favorited_count: Option<i64>,
     #[serde(rename = "showPostsInFeed")]
     pub show_posts_in_feed: Option<bool>,
     #[serde(rename = "canReceiveChatMessage")]
@@ -208,7 +208,7 @@ pub struct Me {
     #[serde(rename = "isSpotifyConnected")]
     pub is_spotify_connected: Option<bool>,
     #[serde(rename = "subscribersCount")]
-    pub subscribers_count: i64,
+    pub subscribers_count: Option<i64>,
     #[serde(rename = "hasPinnedPosts")]
     pub has_pinned_posts: Option<bool>,
     #[serde(rename = "canChat")]
@@ -220,13 +220,13 @@ pub struct Me {
     // #[serde(rename = "phoneMask")]
     // pub phone_mask: Option<serde_json::Value>,
     #[serde(rename = "hasNewTicketReplies")]
-    pub has_new_ticket_replies: HasNewTicketReplies,
+    pub has_new_ticket_replies: Option<HasNewTicketReplies>,
     #[serde(rename = "hasInternalPayments")]
     pub has_internal_payments: Option<bool>,
     #[serde(rename = "isCreditsEnabled")]
     pub is_credits_enabled: Option<bool>,
     #[serde(rename = "creditBalance")]
-    pub credit_balance: f64,
+    pub credit_balance: Option<f64>,
     #[serde(rename = "isMakePayment")]
     pub is_make_payment: Option<bool>,
     #[serde(rename = "isAgeVerified")]
@@ -235,7 +235,7 @@ pub struct Me {
     pub age_verification_required: Option<bool>,
     #[serde(rename = "isOtpEnabled")]
     pub is_otp_enabled: Option<bool>,
-    pub email: String,
+    pub email: Option<String>,
     #[serde(rename = "isEmailChecked")]
     pub is_email_checked: Option<bool>,
     #[serde(rename = "isLegalApprovedAllowed")]
@@ -249,11 +249,11 @@ pub struct Me {
     #[serde(rename = "isPaymentCardConnected")]
     pub is_payment_card_connected: Option<bool>,
     #[serde(rename = "referalUrl")]
-    pub referal_url: String,
+    pub referal_url: Option<String>,
     #[serde(rename = "isVisibleOnline")]
     pub is_visible_online: Option<bool>,
     #[serde(rename = "subscribesCount")]
-    pub subscribes_count: i64,
+    pub subscribes_count: Option<i64>,
     #[serde(rename = "canPinPost")]
     pub can_pin_post: Option<bool>,
     #[serde(rename = "hasNewAlerts")]
@@ -263,13 +263,13 @@ pub struct Me {
     #[serde(rename = "hasNewChangedPriceSubscriptions")]
     pub has_new_changed_price_subscriptions: Option<bool>,
     #[serde(rename = "notificationsCount")]
-    pub notifications_count: i64,
+    pub notifications_count: Option<i64>,
     #[serde(rename = "chatMessagesCount")]
-    pub chat_messages_count: i64,
+    pub chat_messages_count: Option<i64>,
     #[serde(rename = "isWantComments")]
     pub is_want_comments: Option<bool>,
     #[serde(rename = "watermarkText")]
-    pub watermark_text: String,
+    pub watermark_text: Option<String>,
     // #[serde(rename = "customWatermarkText")]
     // pub custom_watermark_text: Option<serde_json::Value>,
     #[serde(rename = "hasWatermarkPhoto")]
@@ -289,7 +289,7 @@ pub struct Me {
     #[serde(rename = "isPayoutLegalApproved")]
     pub is_payout_legal_approved: Option<bool>,
     #[serde(rename = "payoutLegalApproveState")]
-    pub payout_legal_approve_state: String,
+    pub payout_legal_approve_state: Option<String>,
     // #[serde(rename = "payoutLegalApproveRejectReason")]
     // pub payout_legal_approve_reject_reason: Option<serde_json::Value>,
     #[serde(rename = "enabledImageEditorForChat")]
@@ -307,25 +307,25 @@ pub struct Me {
     #[serde(rename = "isRealCardConnected")]
     pub is_real_card_connected: Option<bool>,
     #[serde(rename = "countPriorityChat")]
-    pub count_priority_chat: i64,
+    pub count_priority_chat: Option<i64>,
     #[serde(rename = "hasScenario")]
     pub has_scenario: Option<bool>,
     #[serde(rename = "isWalletAutorecharge")]
     pub is_wallet_autorecharge: Option<bool>,
     #[serde(rename = "walletAutorechargeAmount")]
-    pub wallet_autorecharge_amount: i64,
+    pub wallet_autorecharge_amount: Option<i64>,
     #[serde(rename = "walletAutorechargeMin")]
-    pub wallet_autorecharge_min: i64,
+    pub wallet_autorecharge_min: Option<i64>,
     #[serde(rename = "walletFirstRebills")]
     pub wallet_first_rebills: Option<bool>,
     #[serde(rename = "closeFriends")]
-    pub close_friends: i64,
+    pub close_friends: Option<i64>,
     #[serde(rename = "canAlternativeWalletTopUp")]
     pub can_alternative_wallet_top_up: Option<bool>,
     #[serde(rename = "needIVApprove")]
     pub need_iv_approve: Option<bool>,
     #[serde(rename = "ivStatus")]
-    pub iv_status: String,
+    pub iv_status: Option<String>,
     // #[serde(rename = "ivFailReason")]
     // pub iv_fail_reason: Option<serde_json::Value>,
     #[serde(rename = "canCheckDocsOnAddCard")]
@@ -337,7 +337,7 @@ pub struct Me {
     #[serde(rename = "ivForcedVerified")]
     pub iv_forced_verified: Option<bool>,
     #[serde(rename = "ivFlow")]
-    pub iv_flow: String,
+    pub iv_flow: Option<String>,
     // #[serde(rename = "connectedOfAccounts")]
     // pub connected_of_accounts: Vec<Option<serde_json::Value>>,
     #[serde(rename = "hasPassword")]
@@ -345,9 +345,9 @@ pub struct Me {
     #[serde(rename = "canConnectOfAccount")]
     pub can_connect_of_account: Option<bool>,
     #[serde(rename = "pinnedPostsCount")]
-    pub pinned_posts_count: i64,
+    pub pinned_posts_count: Option<i64>,
     #[serde(rename = "maxPinnedPostsCount")]
-    pub max_pinned_posts_count: i64,
+    pub max_pinned_posts_count: Option<i64>,
     #[serde(rename = "isDeleteInitiated")]
     pub is_delete_initiated: Option<bool>,
 }
@@ -355,7 +355,7 @@ pub struct Me {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PurchasedItem {
     #[serde(rename = "responseType")]
-    pub response_type: String,
+    pub response_type: Option<String>,
     pub text: Option<String>,
     #[serde(rename = "lockedText")]
     pub locked_text: Option<bool>,
@@ -375,7 +375,7 @@ pub struct PurchasedItem {
     #[serde(rename = "fromUser")]
     pub from_user: Option<FromUser>,
     pub author: Option<FromUser>,
-    pub id: i64,
+    pub id: Option<i64>,
     #[serde(rename = "isOpened")]
     pub is_opened: Option<bool>,
     #[serde(rename = "isNew")]
@@ -397,7 +397,7 @@ pub struct PurchasedItem {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
     #[serde(rename = "responseType")]
-    pub response_type: String,
+    pub response_type: Option<String>,
     pub text: Option<String>,
     #[serde(rename = "lockedText")]
     pub locked_text: Option<bool>,
@@ -417,7 +417,7 @@ pub struct Message {
     pub from_user: Option<FromUser>,
     #[serde(rename = "isFromQueue")]
     pub is_from_queue: Option<bool>,
-    pub id: i64,
+    pub id: Option<i64>,
     #[serde(rename = "isOpened")]
     pub is_opened: Option<bool>,
     #[serde(rename = "isNew")]
@@ -433,25 +433,25 @@ pub struct Message {
     #[serde(rename = "canPurchase")]
     pub can_purchase: Option<bool>,
     #[serde(rename = "canPurchaseReason")]
-    pub can_purchase_reason: String,
+    pub can_purchase_reason: Option<String>,
     #[serde(rename = "canReport")]
     pub can_report: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FromUser {
-    pub id: i64,
+    pub id: Option<i64>,
     #[serde(rename = "_view")]
-    pub view: String,
+    pub view: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListUser {
-    pub view: String,
-    pub id: i64,
-    pub name: String,
+    pub view: Option<String>,
+    pub id: Option<i64>,
+    pub name: Option<String>,
     pub username: String,
-    pub avatar: String,
+    pub avatar: Option<String>,
     #[serde(rename = "avatarThumbs")]
     pub avatar_thumbs: Option<AvatarThumbs>,
 }
@@ -472,8 +472,8 @@ pub struct HasNewTicketReplies {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AvatarThumbs {
-    pub c50: String,
-    pub c144: String,
+    pub c50: Option<String>,
+    pub c144: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -484,16 +484,16 @@ pub struct HeaderSize {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HeaderThumbs {
-    pub w480: String,
-    pub w760: String,
+    pub w480: Option<String>,
+    pub w760: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListsState {
-    pub id: i64,
+    pub id: Option<i64>,
     #[serde(rename = "type")]
-    pub lists_state_type: String,
-    pub name: String,
+    pub lists_state_type: Option<String>,
+    pub name: Option<String>,
     #[serde(rename = "hasUser")]
     pub has_user: Option<bool>,
     #[serde(rename = "canAddUser")]
@@ -521,8 +521,8 @@ pub struct SubscribedByData {
     #[serde(rename = "isMuted")]
     pub is_muted: Option<bool>,
     #[serde(rename = "unsubscribeReason")]
-    pub unsubscribe_reason: String,
-    pub duration: String,
+    pub unsubscribe_reason: Option<String>,
+    pub duration: Option<String>,
     #[serde(rename = "showPostsInFeed")]
     pub show_posts_in_feed: Option<bool>,
     pub subscribes: Vec<Subscribe>,
@@ -530,26 +530,26 @@ pub struct SubscribedByData {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Subscribe {
-    pub id: i64,
+    pub id: Option<i64>,
     #[serde(rename = "userId")]
     pub user_id: i64,
     #[serde(rename = "subscriberId")]
     pub subscriber_id: i64,
-    pub date: String,
+    pub date: Option<String>,
     pub duration: i64,
     #[serde(rename = "startDate")]
-    pub start_date: String,
+    pub start_date: Option<String>,
     #[serde(rename = "expireDate")]
-    pub expire_date: String,
+    pub expire_date: Option<String>,
     pub price: f64,
     #[serde(rename = "regularPrice")]
     pub regular_price: f64,
     pub discount: i64,
     #[serde(rename = "earningId")]
     pub earning_id: i64,
-    pub action: String,
+    pub action: Option<String>,
     #[serde(rename = "type")]
-    pub subscribe_type: String,
+    pub subscribe_type: Option<String>,
     #[serde(rename = "offerStart")]
     pub offer_start: Option<String>,
     #[serde(rename = "isCurrent")]
@@ -570,16 +570,16 @@ pub struct SubscribedOnData {
     #[serde(rename = "discountPeriod")]
     pub discount_period: i64,
     #[serde(rename = "subscribeAt")]
-    pub subscribe_at: String,
+    pub subscribe_at: Option<String>,
     #[serde(rename = "expiredAt")]
-    pub expired_at: String,
+    pub expired_at: Option<String>,
     #[serde(rename = "renewedAt")]
     pub renewed_at: Option<String>,
     #[serde(rename = "isMuted")]
     pub is_muted: Option<bool>,
     #[serde(rename = "unsubscribeReason")]
-    pub unsubscribe_reason: String,
-    pub duration: String,
+    pub unsubscribe_reason: Option<String>,
+    pub duration: Option<String>,
     #[serde(rename = "messagesSumm")]
     pub messages_summ: i64,
     #[serde(rename = "tipsSumm")]
@@ -598,10 +598,10 @@ pub struct SubscribedOnData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Post {
     #[serde(rename = "responseType")]
-    pub response_type: String,
-    pub id: i64,
+    pub response_type: Option<String>,
+    pub id: Option<i64>,
     #[serde(rename = "postedAt")]
-    pub posted_at: String,
+    pub posted_at: Option<String>,
     #[serde(rename = "postedAtPrecise")]
     pub posted_at_precise: String,
     #[serde(rename = "expiredAt")]
@@ -674,16 +674,16 @@ pub struct FundRaising {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Author {
-    pub id: i64,
+    pub id: Option<i64>,
     #[serde(rename = "_view")]
-    pub view: String,
+    pub view: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Media {
-    pub id: i64,
+    pub id: Option<i64>,
     #[serde(rename = "type")]
-    pub media_type: String,
+    pub media_type: Option<String>,
     #[serde(rename = "convertedToVideo")]
     pub converted_to_video: Option<bool>,
     #[serde(rename = "canView")]
@@ -744,7 +744,7 @@ pub struct Source {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Story {
-    pub id: i64,
+    pub id: Option<i64>,
     #[serde(rename = "userId")]
     pub user_id: i64,
     #[serde(rename = "createdAt")]
@@ -754,7 +754,7 @@ pub struct Story {
     #[serde(rename = "isReady")]
     pub is_ready: Option<bool>,
     #[serde(rename = "viewersCount")]
-    pub viewers_count: i64,
+    pub viewers_count: Option<i64>,
     #[serde(rename = "canLike")]
     pub can_like: Option<bool>,
     #[serde(rename = "mediaCount")]
@@ -770,7 +770,7 @@ pub struct Story {
     #[serde(rename = "isLastInHighlight")]
     pub is_last_in_highlight: Option<bool>,
     pub media: Option<Vec<Media>>,
-    pub answered: i64,
+    pub answered: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -786,19 +786,19 @@ pub struct Transaction {
     pub fee: Option<i64>,
     #[serde(rename = "createdAt")]
     pub created_at: Option<String>,
-    pub currency: String,
-    pub description: String,
+    pub currency: Option<String>,
+    pub description: Option<String>,
     pub status: Option<String>,
     pub user: Option<User>,
     pub source: Option<String>,
-    pub id: String,
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
-    pub view: String,
-    pub id: i64,
-    pub name: String,
+    pub view: Option<String>,
+    pub id: Option<i64>,
+    pub name: Option<String>,
     pub username: String,
     pub avatar: Option<String>,
     #[serde(rename = "avatarThumbs")]

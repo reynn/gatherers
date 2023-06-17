@@ -199,8 +199,26 @@ pub async fn list(cur_gatherers: Vec<Arc<dyn Gatherer + 'static>>) -> Result<()>
     }
 }
 
+pub enum LikeType {
+    All,
+    User(String),
+}
+
 #[allow(dead_code)]
-pub async fn like(_cur_gatherers: Vec<Arc<dyn Gatherer + 'static>>) -> Result<()> {
+pub async fn like(
+    cur_gatherers: Vec<Arc<dyn Gatherer + 'static>>,
+    like_type: LikeType,
+) -> Result<()> {
+    match like_type {
+        LikeType::All => {
+            log::info!("Liking posts for all subscribed users")
+        }
+        LikeType::User(username) => {
+            for gatherer in cur_gatherers.iter() {
+                log::info!("[{}] Liking posts for user {}", gatherer.name(), username);
+            }
+        }
+    };
     Ok(())
 }
 

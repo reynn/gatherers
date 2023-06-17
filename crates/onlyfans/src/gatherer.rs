@@ -41,7 +41,7 @@ impl Gatherer for crate::OnlyFans {
                                 media.push(valid_media)
                             }
                             None => {
-                                log::debug!("Failed to get media from user post. {}", post_media.id)
+                                log::debug!("Failed to get media from user post. {:?}", post_media.id)
                             }
                         }
                     }
@@ -73,7 +73,7 @@ impl Gatherer for crate::OnlyFans {
                                 media.push(valid_media)
                             }
                             None => {
-                                log::debug!("Failed to get media from msg. {}", msg.id)
+                                log::debug!("Failed to get media from msg. {:?}", msg.id)
                             }
                         }
                     }
@@ -97,7 +97,7 @@ impl Gatherer for crate::OnlyFans {
                         match to_gatherer_media(&story_media, &sub.name.username) {
                             Some(valid_media) => media.push(valid_media),
                             None => {
-                                log::debug!("Failed to get media from user story. {}", story.id)
+                                log::debug!("Failed to get media from user story. {:?}", story.id)
                             }
                         }
                     }
@@ -114,17 +114,17 @@ impl Gatherer for crate::OnlyFans {
             Ok(paid_content) => {
                 let mut results = Vec::new();
                 for item in paid_content.into_iter() {
-                    let user_id: i64 = match &item.response_type[..] {
+                    let user_id: i64 = match item.response_type.unwrap_or(String::new()).as_str() {
                         "message" => {
                             if let Some(from_user) = &item.from_user {
-                                from_user.id
+                                from_user.id.unwrap_or_default()
                             } else {
                                 0
                             }
                         }
                         "post" => {
                             if let Some(author) = &item.author {
-                                author.id
+                                author.id.unwrap_or_default()
                             } else {
                                 0
                             }
@@ -193,7 +193,7 @@ impl Gatherer for crate::OnlyFans {
                                     Some(transaction_user) => transaction_user.username,
                                 },
                                 date,
-                                description: Some(of_transaction.description),
+                                description: of_transaction.description,
                             })
                         } else {
                             None
@@ -218,7 +218,11 @@ pub(crate) fn to_gatherer_media(
     of_media: &'_ crate::structs::Media,
     of_sub_name: &'_ str,
 ) -> Option<Media> {
-    let mime_type = match of_media.media_type.as_str() {
+    let media_type = match &of_media.media_type {
+        Some(mt) => &mt[..],
+        None => "",
+    };
+    let mime_type = match media_type {
         "photo" => "image/jpeg",
         "video" | "gif" => "video/mp4",
         _ => "unknown",

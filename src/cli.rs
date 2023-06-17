@@ -1,5 +1,7 @@
 use eyre::eyre;
 use std::fmt::Formatter;
+
+use crate::cli_tasks::LikeType;
 use {
     crate::{config::Config, get_available_gatherers},
     clap::{Parser, Subcommand},
@@ -142,12 +144,27 @@ impl CliAction {
                 }
                 Err(err) => Err(eyre!("Failed to get configured gatherers. {:?}", err)),
             },
-            CliAction::Like {
-                all: like_all,
-                user: like_user,
-            } => {
+            CliAction::Like { all, user } => {
                 println!("Trying to like posts...");
-                log::debug!("Opts: {:?}, {:?}", like_all, like_user);
+                log::debug!("Opts: {:?}, {:?}", all, user);
+                match get_available_gatherers(&conf, gatherers).await {
+                    Ok(gatherers) => {
+                        let like_type = match all {
+                            Some(_) => LikeType::All,
+                            None => match user {
+                                Some(u) => LikeType::User(u),
+                                None => LikeType::All,
+                            },
+                        };
+                        match crate::cli_tasks::like(gatherers, like_type).await {
+                            Ok(_) => (),
+                            Err(err) => log::error!("Error liking posts: {:?}", err),
+                        }
+                    }
+                    Err(gatherers_err) => {
+                        log::error!("error getting available gatherers: {:?}", gatherers_err)
+                    }
+                }
                 Ok(())
             }
             CliAction::Unlike {

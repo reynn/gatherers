@@ -14,7 +14,7 @@ use {
     gatherer_core::{
         http::{
             header::{HeaderMap, HeaderValue},
-            Client, ClientConfig, Method, Request, Url,
+            Client, ClientConfig, Method, Url,
         },
         Result,
     },
@@ -266,7 +266,7 @@ impl OnlyFans {
                                     .list
                                     .iter()
                                     .last()
-                                    .map(|last_item| last_item.id);
+                                    .map(|last_item| last_item.id.unwrap_or_default());
                             } else {
                                 break;
                             }
