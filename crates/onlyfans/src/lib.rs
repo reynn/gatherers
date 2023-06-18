@@ -78,7 +78,7 @@ fn generate_request_headers(
         "app-token".to_string(),
         match config.app_token.clone() {
             Some(token) => token,
-            None => dynamic_rule.app_token.clone(),
+            None => dynamic_rule.app_token.clone().unwrap_or_default(),
         },
     );
     h.insert("x-bc".to_string(), config.x_bc.to_string());
@@ -252,7 +252,7 @@ impl OnlyFans {
                             .list
                             .iter()
                             .last()
-                            .map(|last_item| last_item.posted_at_precise.clone());
+                            .map(|last_item| last_item.posted_at_precise.clone().unwrap_or_default());
                     }
                     posts.append(&mut response.list);
                 }
@@ -297,7 +297,7 @@ impl OnlyFans {
                                     .list
                                     .iter()
                                     .last()
-                                    .map(|last_item| last_item.id);
+                                    .map(|last_item| last_item.id.unwrap_or_default());
                             } else {
                                 break;
                             }
@@ -471,8 +471,8 @@ fn create_signed_headers(
         .as_millis()
         .to_string();
 
-    let static_param = &rule.static_param;
-    let msg = vec![static_param.as_str(), since_epoch.as_str(), path, user_id].join("\n");
+    let static_param = &rule.static_param.unwrap_or_default();
+    let msg = vec![&static_param.as_str(), since_epoch.as_str(), path, user_id].join("\n");
     let sha = calculate_sha1(msg);
     let sha_ascii = sha.to_ascii_lowercase();
 
@@ -487,7 +487,7 @@ fn create_signed_headers(
     // might be a better way to do this?
     let py_format = rule.format.clone();
     // format! macro can't do this unfortunately
-    let final_sign = py_format
+    let final_sign = py_format.unwrap_or_default()
         .replace("{}", &sha.to_ascii_lowercase())
         .replace("{:x}", format!("{:x}", checksum).as_str());
 
